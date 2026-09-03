@@ -848,6 +848,25 @@ Cashiers dust off vintage Casio desktop calculators, manually typing in the pric
 Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, while managers weigh vegetables on antique mechanical balance scales with swinging needles!"""
                         )
 
+                        with gr.Accordion("📂 Nhập kịch bản từ tệp tin (File Import)", open=False):
+                            with gr.Row():
+                                sc_import_raw = gr.File(label="Import Kịch bản Raw (mỗi dòng 1 câu .txt/.md)", file_types=[".txt", ".md"], scale=1)
+                                sc_import_std = gr.File(label="Import Kịch bản Chuẩn Timeline (.txt/.md)", file_types=[".txt", ".md"], scale=1)
+
+                        def _read_file_content(file_obj):
+                            if not file_obj:
+                                return gr.update()
+                            try:
+                                path = file_obj.name if hasattr(file_obj, "name") else str(file_obj)
+                                with open(path, "r", encoding="utf-8") as f:
+                                    return f.read()
+                            except Exception as e:
+                                gr.Warning(f"Lỗi đọc file: {e}")
+                                return gr.update()
+
+                        sc_import_raw.change(_read_file_content, inputs=[sc_import_raw], outputs=[sc_script])
+                        sc_import_std.change(_read_file_content, inputs=[sc_import_std], outputs=[sc_script])
+
                         gr.Markdown("### 🤖 Tự động nhận diện cảm xúc kịch bản bằng Gemini AI")
                         with gr.Accordion("⚙️ Cấu hình Gemini Flash AI", open=False):
                             with gr.Row():
@@ -877,6 +896,21 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                             with gr.Row():
                                 gemini_apply_btn = gr.Button("✅ Đồng ý & Áp dụng vào kịch bản chính", variant="primary", scale=2)
                                 gemini_cancel_btn = gr.Button("❌ Hủy bỏ", variant="secondary", scale=1)
+
+                        with gr.Row():
+                            sc_export_btn = gr.Button("💾 Xuất file Kịch bản chuẩn (.txt)", size="sm", scale=1)
+                            sc_export_file = gr.File(label="Tải về Kịch bản chuẩn", interactive=False, scale=2)
+
+                        def _on_export_script(script_text):
+                            if not script_text or not script_text.strip():
+                                gr.Warning("Kịch bản hiện tại đang trống.")
+                                return None
+                            tmp = tempfile.NamedTemporaryFile(delete=False, suffix="_standard_script.txt", mode="w", encoding="utf-8")
+                            tmp.write(script_text)
+                            tmp.close()
+                            return tmp.name
+
+                        sc_export_btn.click(_on_export_script, inputs=[sc_script], outputs=[sc_export_file])
 
                         gr.Markdown("💡 **Hoặc bấm gợi ý cảm xúc nhanh thủ công:**")
                         with gr.Row():
