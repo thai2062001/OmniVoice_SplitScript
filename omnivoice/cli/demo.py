@@ -875,31 +875,37 @@ def build_demo(
                         vm_status = gr.Textbox(label="Trạng thái", lines=4)
 
                 def _on_vm_save(name, audio_path, ref_txt, progress=gr.Progress()):
-                    if not name or not name.strip():
-                        return gr.update(), None, "❌ Lỗi: Vui lòng đặt tên cho hồ sơ giọng."
+                    if not name or not str(name).strip():
+                        return gr.update(), gr.update(), gr.update(), None, "❌ Lỗi: Vui lòng đặt tên cho hồ sơ giọng."
                     if not audio_path:
-                        return gr.update(), None, "❌ Lỗi: Vui lòng tải lên file âm thanh mẫu."
+                        return gr.update(), gr.update(), gr.update(), None, "❌ Lỗi: Vui lòng tải lên file âm thanh mẫu."
                     
-                    progress(0.3, desc=f"Đang trích xuất vector đặc trưng giọng '{name}'...")
+                    progress(0.2, desc=f"Đang trích xuất vector đặc trưng giọng '{name}'...")
                     try:
                         prompt_obj = model.create_voice_clone_prompt(
                             ref_audio=audio_path,
-                            ref_text=ref_txt or None,
+                            ref_text=ref_txt if (ref_txt and str(ref_txt).strip()) else None,
                         )
                         saved_name = save_voice_profile(
-                            name=name.strip(),
+                            name=str(name).strip(),
                             prompt_obj=prompt_obj,
-                            metadata={"ref_text": ref_txt or "", "created_at": str(os.path.getmtime(audio_path))},
+                            metadata={"ref_text": ref_txt or "", "created_at": str(os.path.getmtime(audio_path)) if os.path.exists(audio_path) else ""},
                             preview_audio_path=audio_path,
                         )
                         progress(1.0, desc="Đã lưu hồ sơ giọng thành công!")
                         new_list = list_voice_profiles()
                         preview_aud = get_voice_profile_preview(saved_name)
-                        return gr.update(choices=new_list, value=saved_name), preview_aud, f"✅ Đã lưu thành công hồ sơ giọng: '{saved_name}.pt'!"
+                        return (
+                            gr.update(choices=new_list, value=saved_name),
+                            gr.update(choices=new_list, value=saved_name),
+                            gr.update(choices=new_list, value=saved_name),
+                            preview_aud,
+                            f"✅ Đã lưu thành công hồ sơ giọng: '{saved_name}.pt'!"
+                        )
                     except Exception as e:
                         import traceback
                         traceback.print_exc()
-                        return gr.update(), None, f"❌ Lỗi khi trích xuất vector giọng: {e}"
+                        return gr.update(), gr.update(), gr.update(), None, f"❌ Lỗi khi trích xuất vector giọng: {e}"
 
                 def _on_vm_select(profile_nm):
                     if not profile_nm:
@@ -911,21 +917,33 @@ def build_demo(
                     new_list = list_voice_profiles()
                     val = new_list[0] if new_list else None
                     preview_aud = get_voice_profile_preview(val) if val else None
-                    return gr.update(choices=new_list, value=val), preview_aud, "Đã làm mới danh sách hồ sơ giọng."
+                    return (
+                        gr.update(choices=new_list, value=val),
+                        gr.update(choices=new_list, value=val),
+                        gr.update(choices=new_list, value=val),
+                        preview_aud,
+                        "Đã làm mới danh sách hồ sơ giọng."
+                    )
 
                 def _on_vm_delete(profile_nm):
                     if not profile_nm:
-                        return gr.update(), None, "Chưa chọn hồ sơ cần xóa."
+                        return gr.update(), gr.update(), gr.update(), None, "Chưa chọn hồ sơ cần xóa."
                     delete_voice_profile(profile_nm)
                     new_list = list_voice_profiles()
                     val = new_list[0] if new_list else None
                     preview_aud = get_voice_profile_preview(val) if val else None
-                    return gr.update(choices=new_list, value=val), preview_aud, f"Đã xóa hồ sơ: {profile_nm}"
+                    return (
+                        gr.update(choices=new_list, value=val),
+                        gr.update(choices=new_list, value=val),
+                        gr.update(choices=new_list, value=val),
+                        preview_aud,
+                        f"Đã xóa hồ sơ: {profile_nm}"
+                    )
 
                 vm_save_btn.click(
                     _on_vm_save,
                     inputs=[vm_name, vm_audio, vm_text],
-                    outputs=[vm_profiles_list, vm_preview_audio, vm_status],
+                    outputs=[vm_profiles_list, vc_saved_profile, sc_saved_profile, vm_preview_audio, vm_status],
                 )
                 vm_profiles_list.change(
                     _on_vm_select,
@@ -934,12 +952,12 @@ def build_demo(
                 )
                 vm_refresh_btn.click(
                     _on_vm_refresh,
-                    outputs=[vm_profiles_list, vm_preview_audio, vm_status],
+                    outputs=[vm_profiles_list, vc_saved_profile, sc_saved_profile, vm_preview_audio, vm_status],
                 )
                 vm_delete_btn.click(
                     _on_vm_delete,
                     inputs=[vm_profiles_list],
-                    outputs=[vm_profiles_list, vm_preview_audio, vm_status],
+                    outputs=[vm_profiles_list, vc_saved_profile, sc_saved_profile, vm_preview_audio, vm_status],
                 )
 
             # ==============================================================
@@ -1683,16 +1701,6 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                     _on_gemini_cancel,
                     outputs=[gemini_preview_group, sc_status]
                 )
-
-                # Cross-tab automatic dropdown update when profiles are saved/deleted
-                def _update_all_profile_dropdowns():
-                    profs = list_voice_profiles()
-                    val = profs[0] if profs else None
-                    return gr.update(choices=profs, value=val), gr.update(choices=profs, value=val)
-
-                vm_save_btn.click(_update_all_profile_dropdowns, outputs=[vc_saved_profile, sc_saved_profile])
-                vm_delete_btn.click(_update_all_profile_dropdowns, outputs=[vc_saved_profile, sc_saved_profile])
-                vm_refresh_btn.click(_update_all_profile_dropdowns, outputs=[vc_saved_profile, sc_saved_profile])
 
             # ==============================================================
             # Voice Design
