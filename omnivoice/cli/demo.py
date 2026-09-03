@@ -59,22 +59,26 @@ def analyze_script_with_gemini(script_text: str, api_key: str = "", model_name: 
     endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
 
     prompt = f"""Bạn là chuyên gia phân tích kịch bản lồng tiếng chuyên nghiệp.
-Nhiệm vụ của bạn: Đọc từng phân đoạn trong kịch bản dưới đây, dựa vào ngữ cảnh và nội dung thoại để phân tích:
-1. CẢM XÚC (Emotion): ví dụ: Hài hước / Sôi nổi / Vui vẻ / Nghiêm túc, chỉnh chu / Ngạc nhiên / Thì thầm / Buồn bã / Kịch tính, cao trào / Bình thản...
-2. HƯỚNG DẪN AI (Guidance): Tóm tắt hướng dẫn biểu cảm và nhịp điệu đọc (vd: High energy intro, Steady pace, Whisper secretly, Emphasize keywords, Slow down for impact, Excited tone...).
+Nhiệm vụ của bạn: Đọc từng câu/đoạn trong kịch bản dưới đây. Kịch bản đầu vào có thể là:
+- Dạng văn bản thô (mỗi dòng là 1 câu phân đoạn).
+- Hoặc dạng phân đoạn đã có sẵn timeline [#1], [#2]...
+
+Hãy phân tích ngữ cảnh của TỪNG PHÂN ĐOẠN/CÂU và chuẩn hóa sang định dạng lồng tiếng sau:
+[#1] THỜI GIAN: 0.0 -> <thời_lượng_ước_tính_giây>
+VĂN BẢN: <nội dung câu gốc>
+CẢM XÚC: <Hài hước / Sôi nổi / Vui vẻ / Nghiêm túc, chỉnh chu / Ngạc nhiên / Thì thầm / Buồn bã / Kịch tính, cao trào / Bình thản...>
+HƯỚNG DẪN AI: <Tóm tắt hướng dẫn biểu cảm/nhịp điệu: vd: High energy intro, Steady pace, Whisper secretly, Emphasize key moments, Excited tone...>
+------------------------------------------
+[#2] THỜI GIAN: <tiếp_tục_cộng_dồn> -> <kết_thúc>
+...
 
 Quy tắc quan trọng:
-- Trả về TOÀN BỘ kịch bản đã được cập nhật hoặc bổ sung các trường:
-  [#ID] THỜI GIAN: X -> Y
-  VĂN BẢN (JP/VN/...): ...
-  HIỆU ỨNG (SFX): ... (nếu có)
-  CẢM XÚC: <cảm xúc phân tích>
-  HƯỚNG DẪN AI: <hướng dẫn phân tích>
-  ------------------------------------------
-- Giữ nguyên cấu trúc timeline, số thứ tự phân đoạn và nội dung văn bản gốc.
-- Không thêm bất kỳ lời dẫn hay giải thích nào ngoài nội dung kịch bản đã được gắn thẻ.
+- Ước tính thời lượng (THỜI GIAN) hợp lý theo độ dài câu (khoảng 2.5s đến 6.5s mỗi câu). Nếu kịch bản đã có sẵn thời gian thì giữ nguyên timeline gốc.
+- Giữ NGUYÊN VẸN 100% nội dung văn bản từng câu, KHÔNG tự ý chỉnh sửa chữ, không xóa câu, không gộp câu.
+- Mỗi câu phải có số thứ tự [#1], [#2], [#3]... liên tục.
+- Trả về ĐÚNG định dạng khối phân đoạn như trên, KHÔNG thêm lời chào, giải thích ngoài lề.
 
---- KỊCH BẢN GỐC ---
+--- KỊCH BẢN ĐẦU VÀO ---
 {script_text}
 """
 
@@ -302,52 +306,75 @@ def map_to_valid_instruct(emotion_str: str, guidance_str: str):
 def parse_script(script_text: str):
     """
     Parses a script of segments with timelines, text, emotions and instructions.
+    Supports both:
+    1. Structured blocks with [#ID] THỜI GIAN: X -> Y
+    2. Raw line-by-line scripts (each line becomes a segment).
     """
     segments = []
     lines = script_text.split('\n')
     current_seg = None
+    has_structured_tags = bool(re.search(r'\[#\d+\]', script_text))
     
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-            
-        time_match = re.match(r'\[#(\d+)\]\s*THỜI GIAN:\s*([\d\.]+)\s*->\s*([\d\.]+)', line, re.IGNORECASE)
-        if time_match:
-            if current_seg:
-                segments.append(current_seg)
-            seg_id = int(time_match.group(1))
-            start = float(time_match.group(2))
-            end = float(time_match.group(3))
-            current_seg = {
-                "id": seg_id,
-                "duration": round(end - start, 2),
-                "text": "",
+    if has_structured_tags:
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            time_match = re.match(r'\[#(\d+)\]\s*THỜI GIAN:\s*([\d\.]+)\s*->\s*([\d\.]+)', line, re.IGNORECASE)
+            if time_match:
+                if current_seg:
+                    segments.append(current_seg)
+                seg_id = int(time_match.group(1))
+                start = float(time_match.group(2))
+                end = float(time_match.group(3))
+                current_seg = {
+                    "id": seg_id,
+                    "duration": round(end - start, 2),
+                    "text": "",
+                    "emotion": "",
+                    "guidance": "",
+                }
+                continue
+                
+            if current_seg is None:
+                continue
+                
+            text_match = re.match(r'VĂN BẢN\s*(?:\([^)]+\))?:\s*(.+)', line, re.IGNORECASE)
+            if text_match:
+                current_seg["text"] = text_match.group(1).strip()
+                continue
+                
+            emotion_match = re.match(r'CẢM XÚC:\s*(.+)', line, re.IGNORECASE)
+            if emotion_match:
+                current_seg["emotion"] = emotion_match.group(1).strip()
+                continue
+                
+            guidance_match = re.match(r'HƯỚNG DẪN AI:\s*(.+)', line, re.IGNORECASE)
+            if guidance_match:
+                current_seg["guidance"] = guidance_match.group(1).strip()
+                continue
+                
+        if current_seg:
+            segments.append(current_seg)
+    else:
+        # Fallback: Plain text line-by-line parsing
+        seg_counter = 1
+        for raw_line in lines:
+            cleaned = raw_line.strip()
+            if not cleaned or cleaned.startswith("===") or cleaned.startswith("---"):
+                continue
+            # Estimate reasonable duration based on word count (approx 2.5-3 words per sec)
+            words = len(cleaned.split())
+            est_duration = max(3.0, round(words * 0.35 + 1.0, 1))
+            segments.append({
+                "id": seg_counter,
+                "duration": est_duration,
+                "text": cleaned,
                 "emotion": "",
                 "guidance": "",
-            }
-            continue
-            
-        if current_seg is None:
-            continue
-            
-        text_match = re.match(r'VĂN BẢN\s*(?:\([^)]+\))?:\s*(.+)', line, re.IGNORECASE)
-        if text_match:
-            current_seg["text"] = text_match.group(1).strip()
-            continue
-            
-        emotion_match = re.match(r'CẢM XÚC:\s*(.+)', line, re.IGNORECASE)
-        if emotion_match:
-            current_seg["emotion"] = emotion_match.group(1).strip()
-            continue
-            
-        guidance_match = re.match(r'HƯỚNG DẪN AI:\s*(.+)', line, re.IGNORECASE)
-        if guidance_match:
-            current_seg["guidance"] = guidance_match.group(1).strip()
-            continue
-            
-    if current_seg:
-        segments.append(current_seg)
+            })
+            seg_counter += 1
         
     formatted_segs = []
     for seg in segments:
@@ -809,41 +836,16 @@ by Xiaomi AI Lab Next-gen Kaldi team.
                             label="Script / Kịch bản",
                             lines=12,
                             placeholder="[#1] THỜI GIAN: 0.0 -> 5.0\nVĂN BẢN (JP): 日本のコンビニ...\nCẢM XÚC: Energetic\nHƯỚNG DẪN AI: High energy intro\n------------------------------------------",
-                            value="""BẢN TỔNG HỢP TIMELINE & HIỆU ỨNG ÂM THANH
-==========================================
-Thời lượng tổng: 30.0
-Số lượng phân đoạn: 5
-
-[#1] THỜI GIAN: 0.0 -> 5.0
-VĂN BẢN (JP): 日本のコンビニ、実は海外から見る「魔法の場所」らしいよ。外国人がガチで衝撃を受けた3つのこと、紹介するね！
-HIỆU ỨNG (SFX): Paper tearing sound
-CẢM XÚC: Energetic
-HƯỚNG DẪN AI: High energy intro
-------------------------------------------
-[#2] THỜI GIAN: 5.0 -> 11.5
-VĂN BẢN (JP): 第3位、レジだけで生活が完結。公共料金の支払いから宅配の受け取りまで、何でもできちゃう。
-HIỆU ỨNG (SFX): Register 'ding'
-CẢM XÚC: Informative
-HƯỚNG DẪN AI: Steady pace
-------------------------------------------
-[#3] THỜI GIAN: 12.0 -> 19.5
-VĂN BẢN (JP): 第2位、深夜でも揚げたてフード。店員さんが作るチキンやおでん、クオリティ高すぎ！
-HIỆU ỨNG (SFX): Sizzling sound
-CẢM XÚC: Excited
-HƯỚNG DẪN AI: Emphasize 'quality'
-------------------------------------------
-[#4] THỜI GIAN: 20.0 -> 26.5
-VĂN BẢN (JP): そして第1位は、どこでも無料のトイレ。しかもピカピカ！これ、海外じゃマジで奇跡んだって。
-HIỆU ỨNG (SFX): Sparkle chime
-CẢM XÚC: Surprised
-HƯỚNG DẪN AI: Slow down for impact on 'miracle'
-------------------------------------------
-[#5] THỜI GIAN: 27.0 -> 30.0
-VĂN BẢN (JP): 旅行者には最高の味方だよね。日本のコンビニ、すごすぎない？
-HIỆU ỨNG (SFX): Pop
-CẢM XÚC: Friendly
-HƯỚNG DẪN AI: Ask a question for engagement
-------------------------------------------"""
+                            value="""After clawing your way out of your automated smart-home trap, an even bigger disaster strikes your pockets: Apple Pay and credit cards instantly turn into worthless plastic junk!
+Picture yourself pulling into the Starbucks Drive-thru, ordering an iced oat milk caramel macchiato with extra cold foam for nine whole dollars.
+You casually flick your wrist, tapping your shiny Apple Watch against the contactless payment terminal, waiting for that sleek, reassuring digital "beep."
+Instead, the barista shakes his head apologetically as the screen blares a loud error buzz: "Nationwide network blackout, bro. Cash only today, exact change preferred!"
+You frantically dump your entire backpack across the passenger seat: all you can find is one rusty 1998 quarter, two paperclips, and faded Target receipts from six months ago.
+In a society where millions of people go an entire year without ever touching a crisp paper dollar bill, caffeine addicts everywhere plunge into sheer financial paralysis.
+Downtown, outside the big Chase and Bank of America branches, massive queues wrap around four city blocks with desperate citizens praying in front of dead, black ATM screens.
+Over at local grocery supermarkets, pure retail comedy unfolds as cloud-based barcode scanners and digital inventory systems freeze in unison.
+Cashiers dust off vintage Casio desktop calculators, manually typing in the price of every cereal box while squinting at tiny yellow price stickers on shelf edges.
+Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, while managers weigh vegetables on antique mechanical balance scales with swinging needles!"""
                         )
 
                         gr.Markdown("### 🤖 Tự động nhận diện cảm xúc kịch bản bằng Gemini AI")
