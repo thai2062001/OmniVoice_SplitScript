@@ -1684,6 +1684,16 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                     outputs=[gemini_preview_group, sc_status]
                 )
 
+                # Cross-tab automatic dropdown update when profiles are saved/deleted
+                def _update_all_profile_dropdowns():
+                    profs = list_voice_profiles()
+                    val = profs[0] if profs else None
+                    return gr.update(choices=profs, value=val), gr.update(choices=profs, value=val)
+
+                vm_save_btn.click(_update_all_profile_dropdowns, outputs=[vc_saved_profile, sc_saved_profile])
+                vm_delete_btn.click(_update_all_profile_dropdowns, outputs=[vc_saved_profile, sc_saved_profile])
+                vm_refresh_btn.click(_update_all_profile_dropdowns, outputs=[vc_saved_profile, sc_saved_profile])
+
             # ==============================================================
             # Voice Design
             # ==============================================================
