@@ -29,6 +29,8 @@ import os
 import re
 import tempfile
 import zipfile
+import subprocess
+import shutil
 from typing import Any, Dict
 
 import gradio as gr
@@ -1797,6 +1799,243 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                     ]
                     + vd_groups,
                     outputs=[vd_audio, vd_status],
+                )
+
+            # ==============================================================
+            # Audio Merger (Ghép Audio)
+            # ==============================================================
+            with gr.TabItem("🧩 Ghép Audio"):
+                gr.Markdown(
+                    """
+### 🧩 Ghép Nhiều File Audio Thành 1 File Âm Thanh Hoàn Chỉnh
+*Tự động phát hiện và sắp xếp thứ tự chính xác theo số trong tên file (ví dụ: `audio_1.wav` ➔ `audio_2.wav` ➔ ... ➔ `audio_10.wav`).*
+*Hỗ trợ tải lên danh sách file hoặc quét trực tiếp thư mục (mặc định: `audio/no_internet`).*
+"""
+                )
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        am_mode = gr.Radio(
+                            label="Nguồn file Audio",
+                            choices=["Quét thư mục cục bộ (Local Folder)", "Upload file trực tiếp"],
+                            value="Quét thư mục cục bộ (Local Folder)",
+                        )
+                        am_folder = gr.Textbox(
+                            label="Đường dẫn thư mục chứa audio",
+                            value="audio/no_internet",
+                            placeholder="Ví dụ: audio/no_internet hoặc C:/path/to/audios",
+                            visible=True,
+                        )
+                        am_upload_files = gr.File(
+                            label="Tải lên danh sách file Audio",
+                            file_count="multiple",
+                            file_types=["audio"],
+                            visible=False,
+                        )
+                        
+                        am_gap = gr.Slider(
+                            minimum=0.0,
+                            maximum=3.0,
+                            value=0.3,
+                            step=0.1,
+                            label="Khoảng lặng giữa các phân đoạn (giây)",
+                            info="Chèn thêm khoảng im lặng ngắn giữa các audio để giọng đọc tự nhiên hơn.",
+                        )
+                        am_merge_btn = gr.Button("🚀 Bắt Đầu Ghép Audio", variant="primary")
+
+                    with gr.Column(scale=1):
+                        am_status = gr.Textbox(
+                            label="Trạng thái & Thứ tự các file đã nhận diện",
+                            lines=8,
+                            placeholder="Thông tin thứ tự các file sau khi sắp xếp sẽ hiển thị tại đây...",
+                        )
+                        am_output_audio = gr.Audio(
+                            label="🔊 Audio Đã Ghép Hoàn Chỉnh",
+                            type="filepath",
+                        )
+                        am_download_audio = gr.File(
+                            label="💾 Tải File Audio Về Máy (.wav)",
+                            visible=True,
+                        )
+
+                def _toggle_am_mode(choice):
+                    if choice == "Quét thư mục cục bộ (Local Folder)":
+                        return gr.update(visible=True), gr.update(visible=False)
+                    else:
+                        return gr.update(visible=False), gr.update(visible=True)
+
+                am_mode.change(
+                    _toggle_am_mode,
+                    inputs=[am_mode],
+                    outputs=[am_folder, am_upload_files],
+                )
+
+                def _natural_sort_key(file_path):
+                    name = os.path.basename(file_path)
+                    # Phân tích cụm số tự nhiên, hỗ trợ tên có nhiều chữ số (audio_1, audio_2, audio_10...)
+                    return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', name)]
+
+                def _find_ffmpeg():
+                    w = shutil.which("ffmpeg")
+                    if w:
+                        return w
+                    winget_path = r"C:\Users\ADMIN\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.0-full_build\bin\ffmpeg.exe"
+                    if os.path.exists(winget_path):
+                        return winget_path
+                    return "ffmpeg"
+
+                def _process_audio_merger(mode, folder_path, uploaded_files, gap_sec, progress=gr.Progress()):
+                    input_paths = []
+                    valid_exts = (".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac")
+
+                    if mode == "Quét thư mục cục bộ (Local Folder)":
+                        clean_folder = (folder_path or "").strip().strip('"').strip("'")
+                        if not clean_folder:
+                            return "❌ Lỗi: Vui lòng nhập đường dẫn thư mục chứa audio.", None, None
+                        if not os.path.exists(clean_folder):
+                            return f"❌ Lỗi: Thư mục không tồn tại: {clean_folder}", None, None
+                        if not os.path.isdir(clean_folder):
+                            return f"❌ Lỗi: Đường dẫn không phải là thư mục: {clean_folder}", None, None
+
+                        for f in os.listdir(clean_folder):
+                            full_f = os.path.join(clean_folder, f)
+                            if os.path.isfile(full_f) and f.lower().endswith(valid_exts) and os.path.getsize(full_f) > 0:
+                                input_paths.append(full_f)
+                    else:
+                        if not uploaded_files:
+                            return "❌ Lỗi: Vui lòng tải lên ít nhất một file audio.", None, None
+                        for item in uploaded_files:
+                            # Hỗ trợ cả Gradio 3, 4, 5 (str, dict, hoặc object có thuộc tính .name)
+                            if isinstance(item, str):
+                                p = item
+                            elif hasattr(item, "name"):
+                                p = item.name
+                            elif isinstance(item, dict) and "name" in item:
+                                p = item["name"]
+                            else:
+                                p = str(item)
+                            
+                            if p and os.path.exists(p) and os.path.getsize(p) > 0:
+                                input_paths.append(p)
+
+                    if not input_paths:
+                        return "❌ Lỗi: Không tìm thấy file audio nào hợp lệ (hoặc các file đều rỗng 0 bytes).", None, None
+
+                    # Sắp xếp tự nhiên theo số trong tên file
+                    input_paths.sort(key=_natural_sort_key)
+
+                    out_dir = tempfile.mkdtemp(prefix="omnivoice_merge_")
+                    merged_wav_path = os.path.join(out_dir, "merged_audio.wav")
+                    file_info_lines = ["📋 DANH SÁCH & THỨ TỰ GHÉP CHÍNH XÁC:"]
+
+                    progress(0.15, desc="Đang phân tích các file âm thanh...")
+
+                    # Cách 1: Thử ghép bằng soundfile + numpy
+                    merged_successfully = False
+                    try:
+                        import soundfile as sf
+                        audio_arrays = []
+                        target_sr = None
+
+                        for i, p in enumerate(input_paths):
+                            fname = os.path.basename(p)
+                            try:
+                                data, sr = sf.read(p)
+                                if data.ndim > 1:
+                                    data = np.mean(data, axis=1) # Mono
+                                
+                                if target_sr is None:
+                                    target_sr = sr
+                                elif sr != target_sr:
+                                    try:
+                                        import librosa
+                                        data = librosa.resample(data.astype(np.float32), orig_sr=sr, target_sr=target_sr)
+                                    except Exception:
+                                        pass
+
+                                dur = len(data) / target_sr
+                                file_info_lines.append(f"  [{i + 1}] {fname} - Thời lượng: {dur:.2f}s")
+                                audio_arrays.append(data)
+                            except Exception as e:
+                                file_info_lines.append(f"  [{i + 1}] {fname} - [Lỗi đọc]: {e}")
+
+                        if len(audio_arrays) == len(input_paths):
+                            gap_samples = int(max(0.0, float(gap_sec or 0)) * target_sr)
+                            silence = np.zeros(gap_samples, dtype=np.float32) if gap_samples > 0 else np.array([], dtype=np.float32)
+
+                            merged_list = []
+                            for i, arr in enumerate(audio_arrays):
+                                merged_list.append(arr)
+                                if i < len(audio_arrays) - 1 and len(silence) > 0:
+                                    merged_list.append(silence)
+
+                            merged_audio = np.concatenate(merged_list)
+                            total_duration = len(merged_audio) / target_sr
+                            sf.write(merged_wav_path, merged_audio, target_sr)
+                            merged_successfully = True
+                    except Exception:
+                        merged_successfully = False
+
+                    # Cách 2: Ghép bằng FFmpeg (Concat Demuxer an toàn, không giới hạn số lượng file)
+                    if not merged_successfully:
+                        progress(0.4, desc="Đang ghép nối các file qua FFmpeg...")
+                        ffmpeg_bin = _find_ffmpeg()
+                        file_info_lines = ["📋 DANH SÁCH & THỨ TỰ GHÉP CHÍNH XÁC (FFmpeg):"]
+
+                        # Chuẩn bị file danh sách concat
+                        concat_list_file = os.path.join(out_dir, "concat_list.txt")
+                        silence_wav_path = None
+                        gap_val = max(0.0, float(gap_sec or 0))
+
+                        # Tạo file silence nếu có gap
+                        if gap_val > 0:
+                            silence_wav_path = os.path.join(out_dir, "silence_gap.wav")
+                            cmd_silence = [
+                                ffmpeg_bin, "-y",
+                                "-f", "lavfi", "-i", f"anullsrc=r=24000:cl=mono",
+                                "-t", f"{gap_val:.3f}",
+                                silence_wav_path
+                            ]
+                            subprocess.run(cmd_silence, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+                        with open(concat_list_file, "w", encoding="utf-8") as f_txt:
+                            for i, p in enumerate(input_paths):
+                                fname = os.path.basename(p)
+                                file_info_lines.append(f"  [{i + 1}] {fname}")
+                                escaped_p = os.path.abspath(p).replace(os.sep, "/")
+                                f_txt.write(f"file '{escaped_p}'\n")
+                                if i < len(input_paths) - 1 and silence_wav_path and os.path.exists(silence_wav_path):
+                                    escaped_silence = os.path.abspath(silence_wav_path).replace(os.sep, "/")
+                                    f_txt.write(f"file '{escaped_silence}'\n")
+
+                        cmd_concat = [
+                            ffmpeg_bin, "-y",
+                            "-f", "concat",
+                            "-safe", "0",
+                            "-i", concat_list_file,
+                            "-c:a", "pcm_s16le",
+                            merged_wav_path
+                        ]
+                        
+                        try:
+                            res = subprocess.run(cmd_concat, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=300)
+                            if res.returncode == 0 and os.path.exists(merged_wav_path) and os.path.getsize(merged_wav_path) > 0:
+                                merged_successfully = True
+                            else:
+                                return f"❌ Lỗi khi ghép audio qua FFmpeg: {res.stderr[-400:]}", None, None
+                        except Exception as e:
+                            return f"❌ Lỗi chạy lệnh FFmpeg: {e}", None, None
+
+                    file_info_lines.append("--------------------------------------------")
+                    file_info_lines.append(f"✅ ĐÃ GHÉP THÀNH CÔNG {len(input_paths)} FILE AUDIO!")
+                    file_info_lines.append(f"📁 File âm thanh hoàn chỉnh: {merged_wav_path}")
+
+                    progress(1.0, desc="Hoàn tất ghép audio!")
+                    return "\n".join(file_info_lines), merged_wav_path, merged_wav_path
+
+                am_merge_btn.click(
+                    _process_audio_merger,
+                    inputs=[am_mode, am_folder, am_upload_files, am_gap],
+                    outputs=[am_status, am_output_audio, am_download_audio],
                 )
 
     return demo
