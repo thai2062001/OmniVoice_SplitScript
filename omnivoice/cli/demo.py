@@ -31,6 +31,7 @@ import tempfile
 import zipfile
 import subprocess
 import shutil
+import time
 from typing import Any, Dict
 
 import gradio as gr
@@ -139,9 +140,12 @@ def list_voice_profiles():
 
 def save_voice_profile(name: str, prompt_obj, metadata: dict = None, preview_audio_path: str = None):
     """Saves encoded voice prompt and metadata into .pt file."""
-    safe_name = re.sub(r'[^a-zA-Z0-9_\-\u00C0-\u024F\u1EA0-\u1EF9]', '_', name.strip())
+    # Chuẩn hóa tên hồ sơ: giữ lại chữ cái, số, gạch dưới, gạch ngang; thay thế ký tự lạ bằng '_'
+    raw = name.strip()
+    safe_name = re.sub(r'[^\w\-\.]', '_', raw, flags=re.UNICODE)
+    safe_name = re.sub(r'_+', '_', safe_name).strip('_.')
     if not safe_name:
-        raise ValueError("Tên hồ sơ không hợp lệ.")
+        safe_name = f"voice_profile_{int(time.time())}"
     os.makedirs(_SAVED_VOICES_DIR, exist_ok=True)
     filepath = os.path.join(_SAVED_VOICES_DIR, f"{safe_name}.pt")
     
@@ -203,13 +207,19 @@ def get_voice_profile_preview(name: str):
         return None
     try:
         data = torch.load(filepath, map_location="cpu", weights_only=False)
-        if isinstance(data, dict) and "preview_audio" in data and data["preview_audio"] and os.path.exists(data["preview_audio"]):
-            return data["preview_audio"]
+        if isinstance(data, dict) and "preview_audio" in data and data["preview_audio"]:
+            p = data["preview_audio"]
+            # Hỗ trợ cả absolute path và relative path tới _SAVED_VOICES_DIR
+            if os.path.exists(p):
+                return p
+            fallback_local = os.path.join(_SAVED_VOICES_DIR, os.path.basename(p))
+            if os.path.exists(fallback_local):
+                return fallback_local
     except Exception:
         pass
         
     # Fallback: check for direct audio files with same name
-    for ext in [".wav", ".mp3", ".ogg", ".flac"]:
+    for ext in [".wav", ".mp3", ".ogg", ".flac", ".m4a", ".aac", ".webm"]:
         aud = os.path.join(_SAVED_VOICES_DIR, f"{name}{ext}")
         if os.path.exists(aud):
             return aud
@@ -221,12 +231,23 @@ def delete_voice_profile(name: str):
     if not name:
         return False
     pt_path = os.path.join(_SAVED_VOICES_DIR, f"{name}.pt")
+    preview_to_delete = None
     if os.path.exists(pt_path):
         try:
+            data = torch.load(pt_path, map_location="cpu", weights_only=False)
+            if isinstance(data, dict) and "preview_audio" in data:
+                preview_to_delete = data["preview_audio"]
             os.remove(pt_path)
         except Exception:
             pass
-    for ext in [".wav", ".mp3", ".ogg", ".flac"]:
+
+    if preview_to_delete and os.path.exists(preview_to_delete):
+        try:
+            os.remove(preview_to_delete)
+        except Exception:
+            pass
+
+    for ext in [".wav", ".mp3", ".ogg", ".flac", ".m4a", ".aac", ".webm"]:
         aud = os.path.join(_SAVED_VOICES_DIR, f"{name}{ext}")
         if os.path.exists(aud):
             try:
@@ -942,25 +963,7 @@ def build_demo(
                         f"Đã xóa hồ sơ: {profile_nm}"
                     )
 
-                vm_save_btn.click(
-                    _on_vm_save,
-                    inputs=[vm_name, vm_audio, vm_text],
-                    outputs=[vm_profiles_list, vc_saved_profile, sc_saved_profile, vm_preview_audio, vm_status],
-                )
-                vm_profiles_list.change(
-                    _on_vm_select,
-                    inputs=[vm_profiles_list],
-                    outputs=[vm_preview_audio, vm_status],
-                )
-                vm_refresh_btn.click(
-                    _on_vm_refresh,
-                    outputs=[vm_profiles_list, vc_saved_profile, sc_saved_profile, vm_preview_audio, vm_status],
-                )
-                vm_delete_btn.click(
-                    _on_vm_delete,
-                    inputs=[vm_profiles_list],
-                    outputs=[vm_profiles_list, vc_saved_profile, sc_saved_profile, vm_preview_audio, vm_status],
-                )
+
 
             # ==============================================================
             # Voice Clone
@@ -2037,6 +2040,27 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                     inputs=[am_mode, am_folder, am_upload_files, am_gap],
                     outputs=[am_status, am_output_audio, am_download_audio],
                 )
+
+        # Cross-tab Event Listeners: Đăng ký liên kết giữa Voice Manager và các tab sử dụng giọng
+        vm_save_btn.click(
+            _on_vm_save,
+            inputs=[vm_name, vm_audio, vm_text],
+            outputs=[vm_profiles_list, vc_saved_profile, sc_saved_profile, vm_preview_audio, vm_status],
+        )
+        vm_profiles_list.change(
+            _on_vm_select,
+            inputs=[vm_profiles_list],
+            outputs=[vm_preview_audio, vm_status],
+        )
+        vm_refresh_btn.click(
+            _on_vm_refresh,
+            outputs=[vm_profiles_list, vc_saved_profile, sc_saved_profile, vm_preview_audio, vm_status],
+        )
+        vm_delete_btn.click(
+            _on_vm_delete,
+            inputs=[vm_profiles_list],
+            outputs=[vm_profiles_list, vc_saved_profile, sc_saved_profile, vm_preview_audio, vm_status],
+        )
 
     return demo
 
