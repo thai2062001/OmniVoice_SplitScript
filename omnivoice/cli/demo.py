@@ -117,8 +117,90 @@ Quy tắc quan trọng:
     except urllib.error.HTTPError as he:
         err_body = he.read().decode("utf-8", errors="ignore")
         raise ValueError(f"Gemini API Error ({he.code}): {err_body}")
-    except Exception as e:
-        raise ValueError(f"Lỗi khi gọi Gemini API: {e}")
+# ---------------------------------------------------------------------------
+# Saved Voice Profiles Management (.pt embedding storage)
+# ---------------------------------------------------------------------------
+_SAVED_VOICES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saved_voices")
+os.makedirs(_SAVED_VOICES_DIR, exist_ok=True)
+
+
+def list_voice_profiles():
+    """Lists all saved voice profile names."""
+    if not os.path.exists(_SAVED_VOICES_DIR):
+        return []
+    profiles = []
+    for f in os.listdir(_SAVED_VOICES_DIR):
+        if f.endswith(".pt"):
+            profiles.append(os.path.splitext(f)[0])
+    return sorted(profiles)
+
+
+def save_voice_profile(name: str, prompt_tensor, metadata: dict = None, preview_audio_path: str = None):
+    """Saves encoded voice prompt tensor and metadata into .pt file."""
+    safe_name = re.sub(r'[^a-zA-Z0-9_\-\u00C0-\u024F\u1EA0-\u1EF9]', '_', name.strip())
+    if not safe_name:
+        raise ValueError("Tên hồ sơ không hợp lệ.")
+    filepath = os.path.join(_SAVED_VOICES_DIR, f"{safe_name}.pt")
+    data = {
+        "prompt": prompt_tensor,
+        "metadata": metadata or {},
+    }
+    if preview_audio_path and os.path.exists(preview_audio_path):
+        import shutil
+        preview_ext = os.path.splitext(preview_audio_path)[1] or ".wav"
+        saved_preview = os.path.join(_SAVED_VOICES_DIR, f"{safe_name}{preview_ext}")
+        shutil.copy2(preview_audio_path, saved_preview)
+        data["preview_audio"] = saved_preview
+        
+    torch.save(data, filepath)
+    return safe_name
+
+
+def load_voice_profile(name: str):
+    """Loads voice prompt tensor and metadata from .pt file."""
+    if not name:
+        return None, {}
+    filepath = os.path.join(_SAVED_VOICES_DIR, f"{name}.pt")
+    if not os.path.exists(filepath):
+        return None, {}
+    data = torch.load(filepath, map_location="cpu", weights_only=False)
+    if isinstance(data, dict):
+        return data.get("prompt"), data.get("metadata", {})
+    # Legacy format: directly tensor
+    return data, {}
+
+
+def get_voice_profile_preview(name: str):
+    """Gets preview audio path if saved."""
+    if not name:
+        return None
+    filepath = os.path.join(_SAVED_VOICES_DIR, f"{name}.pt")
+    if not os.path.exists(filepath):
+        return None
+    data = torch.load(filepath, map_location="cpu", weights_only=False)
+    if isinstance(data, dict) and "preview_audio" in data and os.path.exists(data["preview_audio"]):
+        return data["preview_audio"]
+    # Check for direct audio files with same name
+    for ext in [".wav", ".mp3", ".ogg", ".flac"]:
+        aud = os.path.join(_SAVED_VOICES_DIR, f"{name}{ext}")
+        if os.path.exists(aud):
+            return aud
+    return None
+
+
+def delete_voice_profile(name: str):
+    """Deletes a saved voice profile and its preview audio."""
+    if not name:
+        return False
+    pt_path = os.path.join(_SAVED_VOICES_DIR, f"{name}.pt")
+    if os.path.exists(pt_path):
+        os.remove(pt_path)
+    for ext in [".wav", ".mp3", ".ogg", ".flac"]:
+        aud = os.path.join(_SAVED_VOICES_DIR, f"{name}{ext}")
+        if os.path.exists(aud):
+            os.remove(aud)
+    return True
+
 
 
 # ---------------------------------------------------------------------------
@@ -566,6 +648,114 @@ by Xiaomi AI Lab Next-gen Kaldi team.
 
         with gr.Tabs():
             # ==============================================================
+            # Voice Manager / Quản lý Hồ sơ Giọng Mẫu
+            # ==============================================================
+            with gr.TabItem("🎙️ Voice Manager / Quản lý Hồ sơ Giọng"):
+                gr.Markdown(
+                    """
+### 🎙️ Quản lý & Lưu Trữ Hồ Sơ Giọng Mẫu Cố Định (.pt Embedding)
+*Tại đây bạn có thể trích xuất vector giọng nói từ một đoạn âm thanh mẫu (3-10 giây) và lưu lại vĩnh viễn.*
+*Các tab **Script Clone** và **Voice Clone** chỉ cần chọn tên giọng để sử dụng ngay mà **không cần upload hay mã hóa lại audio**.*
+"""
+                )
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        vm_name = gr.Textbox(
+                            label="Tên nhân vật / Hồ sơ giọng",
+                            placeholder="Ví dụ: Lucan_Energetic, Nam_Ke_Chuyen, Nu_Truyen_Cam...",
+                        )
+                        vm_audio = gr.Audio(
+                            label="File âm thanh mẫu (3–10 giây)",
+                            type="filepath",
+                            elem_classes="compact-audio",
+                        )
+                        vm_text = gr.Textbox(
+                            label="Văn bản giọng mẫu (Tùy chọn)",
+                            placeholder="Để trống nếu muốn tự động nhận diện (ASR)...",
+                        )
+                        vm_save_btn = gr.Button("⚡ Trích xuất & Lưu Hồ Sơ Giọng (.pt)", variant="primary")
+
+                    with gr.Column(scale=1):
+                        gr.Markdown("### 📂 Danh sách Hồ sơ giọng đã lưu")
+                        vm_profiles_list = gr.Dropdown(
+                            label="Chọn hồ sơ giọng",
+                            choices=list_voice_profiles(),
+                            value=list_voice_profiles()[0] if list_voice_profiles() else None,
+                            interactive=True,
+                        )
+                        with gr.Row():
+                            vm_refresh_btn = gr.Button("🔄 Làm mới danh sách", size="sm")
+                            vm_delete_btn = gr.Button("🗑️ Xóa hồ sơ này", size="sm", variant="stop")
+                        vm_preview_audio = gr.Audio(label="Nghe thử giọng mẫu đã lưu", interactive=False)
+                        vm_status = gr.Textbox(label="Trạng thái", lines=4)
+
+                def _on_vm_save(name, audio_path, ref_txt, progress=gr.Progress()):
+                    if not name or not name.strip():
+                        return gr.update(), None, "❌ Lỗi: Vui lòng đặt tên cho hồ sơ giọng."
+                    if not audio_path:
+                        return gr.update(), None, "❌ Lỗi: Vui lòng tải lên file âm thanh mẫu."
+                    
+                    progress(0.3, desc=f"Đang trích xuất vector đặc trưng giọng '{name}'...")
+                    try:
+                        prompt_tensor = model.create_voice_clone_prompt(
+                            ref_audio=audio_path,
+                            ref_text=ref_txt or None,
+                        )
+                        saved_name = save_voice_profile(
+                            name=name.strip(),
+                            prompt_tensor=prompt_tensor,
+                            metadata={"ref_text": ref_txt or "", "created_at": str(os.path.getmtime(audio_path))},
+                            preview_audio_path=audio_path,
+                        )
+                        progress(1.0, desc="Đã lưu hồ sơ giọng thành công!")
+                        new_list = list_voice_profiles()
+                        preview_aud = get_voice_profile_preview(saved_name)
+                        return gr.update(choices=new_list, value=saved_name), preview_aud, f"✅ Đã lưu thành công hồ sơ giọng: '{saved_name}.pt'!"
+                    except Exception as e:
+                        return gr.update(), None, f"❌ Lỗi khi trích xuất vector giọng: {e}"
+
+                def _on_vm_select(profile_nm):
+                    if not profile_nm:
+                        return None, ""
+                    preview_aud = get_voice_profile_preview(profile_nm)
+                    return preview_aud, f"Đã chọn hồ sơ giọng: {profile_nm}"
+
+                def _on_vm_refresh():
+                    new_list = list_voice_profiles()
+                    val = new_list[0] if new_list else None
+                    preview_aud = get_voice_profile_preview(val) if val else None
+                    return gr.update(choices=new_list, value=val), preview_aud, "Đã làm mới danh sách hồ sơ giọng."
+
+                def _on_vm_delete(profile_nm):
+                    if not profile_nm:
+                        return gr.update(), None, "Chưa chọn hồ sơ cần xóa."
+                    delete_voice_profile(profile_nm)
+                    new_list = list_voice_profiles()
+                    val = new_list[0] if new_list else None
+                    preview_aud = get_voice_profile_preview(val) if val else None
+                    return gr.update(choices=new_list, value=val), preview_aud, f"Đã xóa hồ sơ: {profile_nm}"
+
+                vm_save_btn.click(
+                    _on_vm_save,
+                    inputs=[vm_name, vm_audio, vm_text],
+                    outputs=[vm_profiles_list, vm_preview_audio, vm_status],
+                )
+                vm_profiles_list.change(
+                    _on_vm_select,
+                    inputs=[vm_profiles_list],
+                    outputs=[vm_preview_audio, vm_status],
+                )
+                vm_refresh_btn.click(
+                    _on_vm_refresh,
+                    outputs=[vm_profiles_list, vm_preview_audio, vm_status],
+                )
+                vm_delete_btn.click(
+                    _on_vm_delete,
+                    inputs=[vm_profiles_list],
+                    outputs=[vm_profiles_list, vm_preview_audio, vm_status],
+                )
+
+            # ==============================================================
             # Voice Clone
             # ==============================================================
             with gr.TabItem("Voice Clone"):
@@ -576,22 +766,61 @@ by Xiaomi AI Lab Next-gen Kaldi team.
                             lines=4,
                             placeholder="Enter the text you want to synthesize...",
                         )
-                        vc_ref_audio = gr.Audio(
-                            label="Reference Audio / 参考音频",
-                            type="filepath",
-                            elem_classes="compact-audio",
+
+                        vc_source_type = gr.Radio(
+                            choices=["🎙️ Sử dụng Hồ sơ giọng có sẵn (.pt)", "📤 Tải lên Audio mẫu mới"],
+                            value="🎙️ Sử dụng Hồ sơ giọng có sẵn (.pt)" if list_voice_profiles() else "📤 Tải lên Audio mẫu mới",
+                            label="Nguồn Giọng Mẫu (Voice Source)"
                         )
-                        gr.Markdown(
-                            "<span style='font-size:0.85em;color:#888;'>"
-                            "Recommended: 3–10 seconds audio. "
-                            "</span>"
+
+                        with gr.Group(visible=bool(list_voice_profiles())) as vc_preset_group:
+                            with gr.Row():
+                                vc_saved_profile = gr.Dropdown(
+                                    label="Chọn Hồ sơ giọng cố định",
+                                    choices=list_voice_profiles(),
+                                    value=list_voice_profiles()[0] if list_voice_profiles() else None,
+                                    scale=3
+                                )
+                                vc_preset_preview = gr.Audio(
+                                    label="Nghe thử",
+                                    value=get_voice_profile_preview(list_voice_profiles()[0]) if list_voice_profiles() else None,
+                                    interactive=False,
+                                    scale=2,
+                                    elem_classes="compact-audio"
+                                )
+
+                        with gr.Group(visible=not bool(list_voice_profiles())) as vc_custom_group:
+                            vc_ref_audio = gr.Audio(
+                                label="Reference Audio / 参考音频",
+                                type="filepath",
+                                elem_classes="compact-audio",
+                            )
+                            gr.Markdown(
+                                "<span style='font-size:0.85em;color:#888;'>"
+                                "Recommended: 3–10 seconds audio. "
+                                "</span>"
+                            )
+                            vc_ref_text = gr.Textbox(
+                                label=("Reference Text (optional) / 参考音频文本（可选）"),
+                                lines=2,
+                                placeholder="Transcript of the reference audio. Leave empty to auto-transcribe via ASR models.",
+                            )
+
+                        def _on_vc_source_change(mode_choice):
+                            is_preset = "Hồ sơ giọng có sẵn" in mode_choice
+                            return gr.update(visible=is_preset), gr.update(visible=not is_preset)
+
+                        vc_source_type.change(
+                            _on_vc_source_change,
+                            inputs=[vc_source_type],
+                            outputs=[vc_preset_group, vc_custom_group]
                         )
-                        vc_ref_text = gr.Textbox(
-                            label=("Reference Text (optional) / 参考音频文本（可选）"),
-                            lines=2,
-                            placeholder="Transcript of the reference audio. Leave empty"
-                            " to auto-transcribe via ASR models.",
+                        vc_saved_profile.change(
+                            lambda p: get_voice_profile_preview(p),
+                            inputs=[vc_saved_profile],
+                            outputs=[vc_preset_preview]
                         )
+
                         vc_lang = _lang_dropdown("Language (optional) / 语种 (可选)")
                         with gr.Accordion("Instruct (optional)", open=False):
                             vc_instruct = gr.Textbox(label="Instruct", lines=2)
@@ -613,12 +842,20 @@ by Xiaomi AI Lab Next-gen Kaldi team.
                         vc_status = gr.Textbox(label="Status / 状态", lines=2)
 
                 def _clone_fn(
-                    text, lang, ref_aud, ref_text, instruct, ns, gs, dn, sp, du, pp, po
+                    text, lang, source_type, saved_prof, ref_aud, ref_text, instruct, ns, gs, dn, sp, du, pp, po
                 ):
+                    loaded_prompt = None
+                    actual_ref_audio = ref_aud
+                    if "Hồ sơ giọng có sẵn" in source_type and saved_prof:
+                        loaded_prompt, _ = load_voice_profile(saved_prof)
+                        actual_ref_audio = None
+                        if loaded_prompt is None:
+                            return None, f"Lỗi: Không tìm thấy file hồ sơ {saved_prof}.pt"
+
                     return _gen(
                         text,
                         lang,
-                        ref_aud,
+                        actual_ref_audio,
                         instruct,
                         ns,
                         gs,
@@ -629,6 +866,7 @@ by Xiaomi AI Lab Next-gen Kaldi team.
                         po,
                         mode="clone",
                         ref_text=ref_text or None,
+                        voice_clone_prompt=loaded_prompt,
                     )
 
                 vc_btn.click(
@@ -636,6 +874,8 @@ by Xiaomi AI Lab Next-gen Kaldi team.
                     inputs=[
                         vc_text,
                         vc_lang,
+                        vc_source_type,
+                        vc_saved_profile,
                         vc_ref_audio,
                         vc_ref_text,
                         vc_instruct,
@@ -657,42 +897,16 @@ by Xiaomi AI Lab Next-gen Kaldi team.
                 with gr.Row():
                     with gr.Column(scale=1):
                         bvc_lang = _lang_dropdown("Language (optional) / 语种 (可选)")
-                        
-                        gr.Markdown("### Shared Reference Voice / 共享参考声音")
-                        with gr.Group():
-                            bvc_ref_audio = gr.Audio(
-                                label="Shared Reference Audio / 共享参考音频",
-                                type="filepath",
-                                elem_classes="compact-audio",
-                            )
-                            bvc_ref_text = gr.Textbox(
-                                label="Shared Reference Text (optional) / 共享参考文本（可选）",
-                                placeholder="Transcript of the reference audio. Leave empty to auto-transcribe.",
-                            )
-                        
-                        gr.Markdown("### Texts to Synthesize / 待合成文本 (Up to 5)")
-                        bvc_text1 = gr.Textbox(
-                            label="Text 1 / 文本 1",
-                            placeholder="Enter the text for Voice 1...",
+                        bvc_ref_audio = gr.Audio(
+                            label="Shared Reference Audio / 共享参考音频",
+                            type="filepath",
+                            elem_classes="compact-audio",
                         )
-                        bvc_text2 = gr.Textbox(
-                            label="Text 2 / 文本 2",
-                            placeholder="Enter the text for Voice 2...",
+                        bvc_ref_text = gr.Textbox(
+                            label="Shared Reference Text (optional) / 共享参考音频文本（可选）",
+                            placeholder="Leave empty to auto-transcribe.",
                         )
-                        bvc_text3 = gr.Textbox(
-                            label="Text 3 / 文本 3",
-                            placeholder="Enter the text for Voice 3...",
-                        )
-                        bvc_text4 = gr.Textbox(
-                            label="Text 4 / 文本 4",
-                            placeholder="Enter the text for Voice 4...",
-                        )
-                        bvc_text5 = gr.Textbox(
-                            label="Text 5 / 文本 5",
-                            placeholder="Enter the text for Voice 5...",
-                        )
-
-                        with gr.Accordion("Instruct (optional)", open=False):
+                        with gr.Accordion("Shared Instruct (optional)", open=False):
                             bvc_instruct = gr.Textbox(label="Instruct", lines=2)
                         (
                             bvc_ns,
@@ -703,7 +917,13 @@ by Xiaomi AI Lab Next-gen Kaldi team.
                             bvc_pp,
                             bvc_po,
                         ) = _gen_settings()
-                        bvc_btn = gr.Button("Generate All / Đồng loạt sinh giọng", variant="primary")
+
+                        bvc_text1 = gr.Textbox(label="Text 1 / 文本 1", lines=2)
+                        bvc_text2 = gr.Textbox(label="Text 2 / 文本 2", lines=2)
+                        bvc_text3 = gr.Textbox(label="Text 3 / 文本 3", lines=2)
+                        bvc_text4 = gr.Textbox(label="Text 4 / 文本 4", lines=2)
+                        bvc_text5 = gr.Textbox(label="Text 5 / 文本 5", lines=2)
+                        bvc_btn = gr.Button("Batch Generate / 批量生成", variant="primary")
                     with gr.Column(scale=1):
                         bvc_audio1 = gr.Audio(
                             label="Output Voice 1 / 合成结果 1",
@@ -819,8 +1039,30 @@ by Xiaomi AI Lab Next-gen Kaldi team.
                     with gr.Column(scale=1):
                         sc_lang = _lang_dropdown("Language (optional) / 语种 (可选)")
                         
-                        gr.Markdown("### 1. Upload Shared Reference Voice / Tải lên giọng mẫu dùng chung")
-                        with gr.Group():
+                        gr.Markdown("### 1. Chọn Giọng Mẫu (Voice Profile / Custom Audio)")
+                        sc_source_type = gr.Radio(
+                            choices=["🎙️ Sử dụng Hồ sơ giọng có sẵn (.pt)", "📤 Tải lên Audio mẫu mới"],
+                            value="🎙️ Sử dụng Hồ sơ giọng có sẵn (.pt)" if list_voice_profiles() else "📤 Tải lên Audio mẫu mới",
+                            label="Nguồn Giọng Mẫu (Voice Source)"
+                        )
+
+                        with gr.Group(visible=bool(list_voice_profiles())) as sc_preset_group:
+                            with gr.Row():
+                                sc_saved_profile = gr.Dropdown(
+                                    label="Chọn Hồ sơ giọng cố định",
+                                    choices=list_voice_profiles(),
+                                    value=list_voice_profiles()[0] if list_voice_profiles() else None,
+                                    scale=3
+                                )
+                                sc_preset_preview = gr.Audio(
+                                    label="Nghe thử",
+                                    value=get_voice_profile_preview(list_voice_profiles()[0]) if list_voice_profiles() else None,
+                                    interactive=False,
+                                    scale=2,
+                                    elem_classes="compact-audio"
+                                )
+
+                        with gr.Group(visible=not bool(list_voice_profiles())) as sc_custom_group:
                             sc_ref_audio = gr.Audio(
                                 label="Shared Reference Audio (Optional for Voice Cloning) / Giọng nói mẫu dùng chung (Tùy chọn)",
                                 type="filepath",
@@ -830,6 +1072,21 @@ by Xiaomi AI Lab Next-gen Kaldi team.
                                 label="Shared Reference Text (optional) / Văn bản giọng mẫu (Tùy chọn)",
                                 placeholder="Leave empty to auto-transcribe.",
                             )
+
+                        def _on_sc_source_change(mode_choice):
+                            is_preset = "Hồ sơ giọng có sẵn" in mode_choice
+                            return gr.update(visible=is_preset), gr.update(visible=not is_preset)
+
+                        sc_source_type.change(
+                            _on_sc_source_change,
+                            inputs=[sc_source_type],
+                            outputs=[sc_preset_group, sc_custom_group]
+                        )
+                        sc_saved_profile.change(
+                            lambda p: get_voice_profile_preview(p),
+                            inputs=[sc_saved_profile],
+                            outputs=[sc_preset_preview]
+                        )
                         
                         gr.Markdown("### 2. Paste Script / Dán Kịch bản timeline")
                         sc_script = gr.Textbox(
@@ -1006,7 +1263,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                         sc_status = gr.Textbox(label="Status & Live Logs / Tiến trình trực tiếp", lines=5)
 
                 def _generate_segments_core(
-                    lang, ref_audio, ref_text, script_text,
+                    lang, source_type, saved_prof, ref_audio, ref_text, script_text,
                     ns, gs, dn, sp, du, pp, po,
                     target_indices, current_page, all_cache, temp_dir,
                     progress=gr.Progress()
@@ -1032,7 +1289,14 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                         temp_dir = tempfile.mkdtemp()
 
                     prompt = None
-                    if ref_audio and str(ref_audio).strip():
+                    actual_ref_audio = ref_audio
+                    if "Hồ sơ giọng có sẵn" in source_type and saved_prof:
+                        prompt, _ = load_voice_profile(saved_prof)
+                        actual_ref_audio = None
+                        if prompt is None:
+                            yield _render_script_page(current_page, segments, all_cache, temp_dir, None, f"Error: Không thể nạp hồ sơ giọng {saved_prof}.pt")
+                            return
+                    elif ref_audio and str(ref_audio).strip():
                         try:
                             prompt = model.create_voice_clone_prompt(
                                 ref_audio=ref_audio,
@@ -1042,7 +1306,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                             yield _render_script_page(current_page, segments, all_cache, temp_dir, None, f"Error encoding reference audio: {e}")
                             return
                     
-                    mode = "clone" if (ref_audio and str(ref_audio).strip()) else "design"
+                    mode = "clone" if (prompt is not None or (ref_audio and str(ref_audio).strip())) else "design"
                     statuses = []
                     total_targets = len(target_indices)
 
@@ -1065,7 +1329,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                             res, stat = _gen(
                                 text,
                                 lang,
-                                ref_audio if (ref_audio and str(ref_audio).strip()) else None,
+                                actual_ref_audio if (actual_ref_audio and str(actual_ref_audio).strip()) else None,
                                 instruct_val,
                                 ns,
                                 gs,
@@ -1148,17 +1412,17 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                         page_idx, all_cache, temp_dir
                     )
 
-                def _on_generate_current(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir, progress=gr.Progress()):
+                def _on_generate_current(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir, progress=gr.Progress()):
                     segments = parse_script(script_text) if script_text else []
                     if not segments:
                         yield _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
                         return
                     start_idx = page_idx * 5
                     target_indices = list(range(start_idx, min(start_idx + 5, len(segments))))
-                    for res in _generate_segments_core(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, target_indices, page_idx, all_cache, temp_dir, progress):
+                    for res in _generate_segments_core(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, target_indices, page_idx, all_cache, temp_dir, progress):
                         yield res
 
-                def _on_continue_next(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir, progress=gr.Progress()):
+                def _on_continue_next(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir, progress=gr.Progress()):
                     segments = parse_script(script_text) if script_text else []
                     if not segments:
                         yield _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
@@ -1168,25 +1432,25 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                     next_page = min(page_idx + 1, P - 1)
                     start_idx = next_page * 5
                     target_indices = list(range(start_idx, min(start_idx + 5, N)))
-                    for res in _generate_segments_core(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, target_indices, next_page, all_cache, temp_dir, progress):
+                    for res in _generate_segments_core(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, target_indices, next_page, all_cache, temp_dir, progress):
                         yield res
 
-                def _on_generate_all(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir, progress=gr.Progress()):
+                def _on_generate_all(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir, progress=gr.Progress()):
                     segments = parse_script(script_text) if script_text else []
                     if not segments:
                         yield _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
                         return
                     target_indices = list(range(len(segments)))
-                    for res in _generate_segments_core(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, target_indices, page_idx, all_cache, temp_dir, progress):
+                    for res in _generate_segments_core(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, target_indices, page_idx, all_cache, temp_dir, progress):
                         yield res
 
-                def _on_retry_single(slot_idx, lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir, progress=gr.Progress()):
+                def _on_retry_single(slot_idx, lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir, progress=gr.Progress()):
                     segments = parse_script(script_text) if script_text else []
                     actual_idx = page_idx * 5 + slot_idx
                     if not segments or actual_idx >= len(segments):
                         yield _render_script_page(page_idx, segments, all_cache or {}, temp_dir or "", None, f"Phân đoạn {actual_idx + 1} không tồn tại.")
                         return
-                    for res in _generate_segments_core(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, [actual_idx], page_idx, all_cache, temp_dir, progress):
+                    for res in _generate_segments_core(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, [actual_idx], page_idx, all_cache, temp_dir, progress):
                         yield res
 
                 def _on_prev_view(script_text, page_idx, all_cache, temp_dir):
@@ -1202,7 +1466,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                     return _render_script_page(new_page, segments, all_cache or {}, temp_dir, None, f"Đang xem trang {new_page + 1}")
 
                 gen_inputs = [
-                    sc_lang, sc_ref_audio, sc_ref_text, sc_script,
+                    sc_lang, sc_source_type, sc_saved_profile, sc_ref_audio, sc_ref_text, sc_script,
                     sc_ns, sc_gs, sc_dn, sc_sp, sc_du, sc_pp, sc_po,
                     sc_page_state, sc_cache_state, sc_temp_dir_state
                 ]
