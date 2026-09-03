@@ -557,94 +557,247 @@ def build_demo(
     # =====================================================================
     # UI
     # =====================================================================
-    theme = gr.themes.Soft(
-        font=["Inter", "Arial", "sans-serif"],
+    # =====================================================================
+    # UI Design System (Monochrome Minimalist: Pure White / Neutral Gray / Deep Dark)
+    # =====================================================================
+    theme = gr.themes.Base(
+        primary_hue=gr.themes.colors.neutral,
+        secondary_hue=gr.themes.colors.neutral,
+        neutral_hue=gr.themes.colors.neutral,
+        font=["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+    ).set(
+        body_background_fill="*neutral_50",
+        body_background_fill_dark="*neutral_950",
+        block_background_fill="white",
+        block_background_fill_dark="*neutral_900",
+        block_border_width="1px",
+        block_border_color="*neutral_200",
+        block_border_color_dark="*neutral_800",
+        block_radius="10px",
+        button_primary_background_fill="*neutral_900",
+        button_primary_background_fill_dark="*neutral_100",
+        button_primary_text_color="white",
+        button_primary_text_color_dark="*neutral_900",
+        button_primary_border_color="*neutral_900",
+        button_secondary_background_fill="*neutral_100",
+        button_secondary_background_fill_dark="*neutral_800",
+        button_secondary_text_color="*neutral_900",
+        button_secondary_text_color_dark="*neutral_100",
+        button_secondary_border_color="*neutral_300",
+        input_background_fill="*neutral_50",
+        input_background_fill_dark="*neutral_950",
+        input_border_color="*neutral_300",
+        input_border_color_dark="*neutral_700",
+        input_radius="8px",
     )
+
     css = """
-    .gradio-container {max-width: 100% !important; font-size: 16px !important;}
-    .gradio-container h1 {font-size: 1.5em !important;}
-    .gradio-container .prose {font-size: 1.1em !important;}
-    .compact-audio audio {height: 60px !important;}
-    .compact-audio .waveform {min-height: 80px !important;}
+    :root {
+        --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .gradio-container {
+        max-width: 1440px !important;
+        margin: 0 auto !important;
+        font-family: var(--font-sans) !important;
+    }
+    
+    /* Header hero styling */
+    .app-header {
+        background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+        border: 1px solid #e5e5e5;
+        border-radius: 12px;
+        padding: 24px 32px;
+        margin-bottom: 24px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    }
+    .dark .app-header {
+        background: linear-gradient(180deg, #171717 0%, #0a0a0a 100%);
+        border: 1px solid #262626;
+    }
+    .app-title {
+        font-size: 24px !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.03em !important;
+        margin: 0 0 4px 0 !important;
+        color: #111111 !important;
+    }
+    .dark .app-title {
+        color: #ffffff !important;
+    }
+    .app-subtitle {
+        font-size: 14px !important;
+        color: #737373 !important;
+        margin: 0 !important;
+    }
+
+    /* Tabs refinement */
+    .tabs {
+        border-bottom: 1px solid #e5e5e5 !important;
+    }
+    .tab-nav button {
+        font-weight: 600 !important;
+        font-size: 14px !important;
+        letter-spacing: -0.01em !important;
+        padding: 10px 18px !important;
+        border-radius: 8px 8px 0 0 !important;
+    }
+    .tab-nav button.selected {
+        border-bottom: 2px solid #171717 !important;
+        color: #171717 !important;
+    }
+    .dark .tab-nav button.selected {
+        border-bottom: 2px solid #ffffff !important;
+        color: #ffffff !important;
+    }
+
+    /* Buttons */
+    button {
+        font-weight: 600 !important;
+        letter-spacing: -0.01em !important;
+        transition: all 0.15s ease-in-out !important;
+    }
+    button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.06) !important;
+    }
+    button:active {
+        transform: translateY(0);
+    }
+    
+    /* Preset Chips */
+    .preset-chip {
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        border-radius: 20px !important;
+        padding: 4px 14px !important;
+        background: #f5f5f5 !important;
+        border: 1px solid #e5e5e5 !important;
+        color: #262626 !important;
+    }
+    .preset-chip:hover {
+        background: #171717 !important;
+        color: #ffffff !important;
+        border-color: #171717 !important;
+    }
+    .dark .preset-chip {
+        background: #262626 !important;
+        border-color: #404040 !important;
+        color: #e5e5e5 !important;
+    }
+    .dark .preset-chip:hover {
+        background: #ffffff !important;
+        color: #171717 !important;
+        border-color: #ffffff !important;
+    }
+
+    /* Audio components */
+    .compact-audio audio {
+        height: 48px !important;
+    }
+    
+    /* Segment Audio Card Box */
+    .segment-card {
+        border: 1px solid #e5e5e5;
+        border-radius: 10px;
+        padding: 12px;
+        background: #ffffff;
+        margin-bottom: 8px;
+    }
+    .dark .segment-card {
+        border: 1px solid #262626;
+        background: #171717;
+    }
+
+    /* Clean subtle scrollbars */
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #d4d4d4;
+        border-radius: 4px;
+    }
+    .dark ::-webkit-scrollbar-thumb {
+        background: #404040;
+    }
     """
 
     # Reusable: language dropdown component
-    def _lang_dropdown(label="Language (optional) / 语种 (可选)", value="Auto"):
+    def _lang_dropdown(label="Ngôn ngữ (Language)", value="Auto"):
         return gr.Dropdown(
             label=label,
             choices=_ALL_LANGUAGES,
             value=value,
             allow_custom_value=False,
             interactive=True,
-            info="Keep as Auto to auto-detect the language.",
+            info="Mặc định 'Auto' để tự động nhận diện ngôn ngữ.",
         )
 
     # Reusable: optional generation settings accordion
     def _gen_settings():
-        with gr.Accordion("Generation Settings (optional)", open=False):
-            sp = gr.Slider(
-                0.5,
-                1.5,
-                value=1.0,
-                step=0.05,
-                label="Speed",
-                info="1.0 = normal. >1 faster, <1 slower. Ignored if Duration is set.",
-            )
-            du = gr.Number(
-                value=None,
-                label="Duration (seconds)",
-                info=(
-                    "Leave empty to use speed. Set a fixed duration to override speed."
-                ),
-            )
-            ns = gr.Slider(
-                4,
-                64,
-                value=32,
-                step=1,
-                label="Inference Steps",
-                info="Default: 32. Lower = faster, higher = better quality.",
-            )
-            dn = gr.Checkbox(
-                label="Denoise",
-                value=True,
-                info="Default: enabled. Uncheck to disable denoising.",
-            )
-            gs = gr.Slider(
-                0.0,
-                4.0,
-                value=2.0,
-                step=0.1,
-                label="Guidance Scale (CFG)",
-                info="Default: 2.0.",
-            )
-            pp = gr.Checkbox(
-                label="Preprocess Prompt",
-                value=True,
-                info="apply silence removal and trimming to the reference "
-                "audio, add punctuation in the end of reference text (if not already)",
-            )
-            po = gr.Checkbox(
-                label="Postprocess Output",
-                value=True,
-                info="Remove long silences from generated audio.",
-            )
+        with gr.Accordion("⚙️ Cài đặt tạo giọng nâng cao (Generation Settings)", open=False):
+            with gr.Row():
+                sp = gr.Slider(
+                    0.5,
+                    1.5,
+                    value=1.0,
+                    step=0.05,
+                    label="Tốc độ nói (Speed)",
+                    info="1.0 = chuẩn. >1 nói nhanh hơn, <1 nói chậm hơn.",
+                    scale=1
+                )
+                du = gr.Number(
+                    value=None,
+                    label="Thời lượng cố định (giây)",
+                    info="Để trống để dùng tốc độ. Điền số để ép đúng số giây mong muốn.",
+                    scale=1
+                )
+            with gr.Row():
+                ns = gr.Slider(
+                    4,
+                    64,
+                    value=32,
+                    step=1,
+                    label="Số bước khử nhiễu (Inference Steps)",
+                    info="Mặc định: 32. Càng cao âm thanh càng chi tiết.",
+                    scale=1
+                )
+                gs = gr.Slider(
+                    0.0,
+                    4.0,
+                    value=2.0,
+                    step=0.1,
+                    label="Độ bám sát chỉ dẫn (Guidance Scale / CFG)",
+                    info="Mặc định: 2.0.",
+                    scale=1
+                )
+            with gr.Row():
+                dn = gr.Checkbox(
+                    label="Khử nhiễu nền (Denoise)",
+                    value=True,
+                    info="Bật để lọc bớt tạp âm nền.",
+                )
+                pp = gr.Checkbox(
+                    label="Tiền xử lý mẫu giọng (Preprocess Prompt)",
+                    value=True,
+                    info="Tự động cắt khoảng lặng ở giọng mẫu.",
+                )
+                po = gr.Checkbox(
+                    label="Hậu xử lý kết quả (Postprocess Output)",
+                    value=True,
+                    info="Xóa bỏ khoảng lặng thừa ở cuối file audio sinh ra.",
+                )
         return ns, gs, dn, sp, du, pp, po
 
-    with gr.Blocks(theme=theme, css=css, title="mypage") as demo:
-        gr.Markdown(
-            """
-# mypage
-
-State-of-the-art text-to-speech model for **600+ languages**, supporting:
-
-- **Voice Clone** — Clone any voice from a reference audio
-- **Voice Design** — Create custom voices with speaker attributes
-
-Built with [OmniVoice](https://github.com/k2-fsa/OmniVoice)
-by Xiaomi AI Lab Next-gen Kaldi team.
+    with gr.Blocks(theme=theme, css=css, title="OmniVoice Studio") as demo:
+        with gr.Row(elem_classes="app-header"):
+            with gr.Column():
+                gr.Markdown(
+                    """
+<h1 class="app-title">⚡ OmniVoice AI Studio</h1>
+<p class="app-subtitle">Nền tảng lồng tiếng & Clone Voice kịch bản chuyên nghiệp cho hơn 600+ ngôn ngữ</p>
 """
-        )
+                )
 
         with gr.Tabs():
             # ==============================================================
@@ -1169,13 +1322,13 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
 
                         sc_export_btn.click(_on_export_script, inputs=[sc_script], outputs=[sc_export_file])
 
-                        gr.Markdown("💡 **Hoặc bấm gợi ý cảm xúc nhanh thủ công:**")
+                        gr.Markdown("💡 **Gợi ý cảm xúc nhanh:**")
                         with gr.Row():
-                            preset_btn_fun = gr.Button("😂 Hài hước / Sôi nổi", size="sm")
-                            preset_btn_serious = gr.Button("🧐 Nghiêm túc / Chỉnh chu", size="sm")
-                            preset_btn_whisper = gr.Button("🤫 Thì thầm / Bí ẩn", size="sm")
-                            preset_btn_dramatic = gr.Button("🔥 Kịch tính / Cao trào", size="sm")
-                            preset_btn_calm = gr.Button("☕ Nhẹ nhàng / Bình thản", size="sm")
+                            preset_btn_fun = gr.Button("😂 Hài hước / Sôi nổi", size="sm", elem_classes="preset-chip")
+                            preset_btn_serious = gr.Button("🧐 Nghiêm túc / Chỉnh chu", size="sm", elem_classes="preset-chip")
+                            preset_btn_whisper = gr.Button("🤫 Thì thầm / Bí ẩn", size="sm", elem_classes="preset-chip")
+                            preset_btn_dramatic = gr.Button("🔥 Kịch tính / Cao trào", size="sm", elem_classes="preset-chip")
+                            preset_btn_calm = gr.Button("☕ Nhẹ nhàng / Bình thản", size="sm", elem_classes="preset-chip")
 
                         def _append_preset(script_text, emotion_str, guide_str):
                             preset_template = f"\nCẢM XÚC: {emotion_str}\nHƯỚNG DẪN AI: {guide_str}\n"
@@ -1232,9 +1385,9 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                         ) = _gen_settings()
 
                         with gr.Row():
-                            sc_btn = gr.Button("▶ Sinh đợt này (5 phân đoạn)", variant="primary", scale=1)
-                            sc_next_btn = gr.Button("⏭ Tiếp tục đợt tiếp theo", variant="secondary", scale=1)
-                        sc_all_btn = gr.Button("⚡ Sinh TOÀN BỘ kịch bản", variant="stop")
+                            sc_btn = gr.Button("▶ Sinh đợt này (5 phân đoạn)", variant="primary", scale=2)
+                            sc_next_btn = gr.Button("⏭ Đợt tiếp theo", variant="secondary", scale=1)
+                        sc_all_btn = gr.Button("⚡ Sinh TOÀN BỘ kịch bản", variant="primary")
                     with gr.Column(scale=1):
                         with gr.Row():
                             sc_prev_view_btn = gr.Button("◀ Đợt trước", size="sm", scale=1)
@@ -1242,19 +1395,19 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                             sc_next_view_btn = gr.Button("Đợt sau ▶", size="sm", scale=1)
 
                         with gr.Group():
-                            with gr.Row():
+                            with gr.Row(elem_classes="segment-card"):
                                 sc_audio1 = gr.Audio(label="Segment 1 Output", type="numpy", scale=4)
                                 sc_retry1 = gr.Button("🔄 Thử lại", size="sm", scale=1)
-                            with gr.Row():
+                            with gr.Row(elem_classes="segment-card"):
                                 sc_audio2 = gr.Audio(label="Segment 2 Output", type="numpy", scale=4)
                                 sc_retry2 = gr.Button("🔄 Thử lại", size="sm", scale=1)
-                            with gr.Row():
+                            with gr.Row(elem_classes="segment-card"):
                                 sc_audio3 = gr.Audio(label="Segment 3 Output", type="numpy", scale=4)
                                 sc_retry3 = gr.Button("🔄 Thử lại", size="sm", scale=1)
-                            with gr.Row():
+                            with gr.Row(elem_classes="segment-card"):
                                 sc_audio4 = gr.Audio(label="Segment 4 Output", type="numpy", scale=4)
                                 sc_retry4 = gr.Button("🔄 Thử lại", size="sm", scale=1)
-                            with gr.Row():
+                            with gr.Row(elem_classes="segment-card"):
                                 sc_audio5 = gr.Audio(label="Segment 5 Output", type="numpy", scale=4)
                                 sc_retry5 = gr.Button("🔄 Thử lại", size="sm", scale=1)
                         
