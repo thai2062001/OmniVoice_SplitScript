@@ -1358,21 +1358,6 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
 
                         def _on_gemini_cancel():
                             return gr.update(visible=False), "Đã hủy gợi ý của Gemini."
-
-                        gemini_analyze_btn.click(
-                            _on_gemini_analyze,
-                            inputs=[sc_script, gemini_api_key, gemini_model],
-                            outputs=[gemini_preview_group, gemini_suggested_script, sc_status]
-                        )
-                        gemini_apply_btn.click(
-                            _on_gemini_apply,
-                            inputs=[gemini_suggested_script],
-                            outputs=[sc_script, gemini_preview_group, sc_status]
-                        )
-                        gemini_cancel_btn.click(
-                            _on_gemini_cancel,
-                            outputs=[gemini_preview_group, sc_status]
-                        )
                         
                         (
                             sc_ns,
@@ -1648,6 +1633,21 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                     _on_next_view,
                     inputs=[sc_script, sc_page_state, sc_cache_state, sc_temp_dir_state],
                     outputs=gen_outputs
+                )
+
+                gemini_analyze_btn.click(
+                    _on_gemini_analyze,
+                    inputs=[sc_script, gemini_api_key, gemini_model],
+                    outputs=[gemini_preview_group, gemini_suggested_script, sc_status]
+                )
+                gemini_apply_btn.click(
+                    _on_gemini_apply,
+                    inputs=[gemini_suggested_script],
+                    outputs=[sc_script, gemini_preview_group, sc_status]
+                )
+                gemini_cancel_btn.click(
+                    _on_gemini_cancel,
+                    outputs=[gemini_preview_group, sc_status]
                 )
 
             # ==============================================================
