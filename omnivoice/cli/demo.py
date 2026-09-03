@@ -1235,6 +1235,7 @@ def build_demo(
                         bvc_pp,
                         bvc_po,
                     ],
+                    outputs=[bvc_audio1, bvc_audio2, bvc_audio3, bvc_audio4, bvc_audio5, bvc_status],
                 )
 
             # ==============================================================
