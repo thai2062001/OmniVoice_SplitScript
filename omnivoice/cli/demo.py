@@ -135,29 +135,44 @@ def list_voice_profiles():
     return sorted(profiles)
 
 
-def save_voice_profile(name: str, prompt_tensor, metadata: dict = None, preview_audio_path: str = None):
-    """Saves encoded voice prompt tensor and metadata into .pt file."""
+def save_voice_profile(name: str, prompt_obj, metadata: dict = None, preview_audio_path: str = None):
+    """Saves encoded voice prompt and metadata into .pt file."""
     safe_name = re.sub(r'[^a-zA-Z0-9_\-\u00C0-\u024F\u1EA0-\u1EF9]', '_', name.strip())
     if not safe_name:
         raise ValueError("Tên hồ sơ không hợp lệ.")
+    os.makedirs(_SAVED_VOICES_DIR, exist_ok=True)
     filepath = os.path.join(_SAVED_VOICES_DIR, f"{safe_name}.pt")
-    data = {
-        "prompt": prompt_tensor,
-        "metadata": metadata or {},
-    }
+    
+    saved_preview = None
     if preview_audio_path and os.path.exists(preview_audio_path):
         import shutil
         preview_ext = os.path.splitext(preview_audio_path)[1] or ".wav"
         saved_preview = os.path.join(_SAVED_VOICES_DIR, f"{safe_name}{preview_ext}")
         shutil.copy2(preview_audio_path, saved_preview)
-        data["preview_audio"] = saved_preview
+
+    if hasattr(prompt_obj, "save"):
+        # Native VoiceClonePrompt dataclass
+        data = {
+            "format_version": 1,
+            "ref_audio_tokens": prompt_obj.ref_audio_tokens.detach().cpu(),
+            "ref_text": prompt_obj.ref_text,
+            "ref_rms": float(prompt_obj.ref_rms),
+            "metadata": metadata or {},
+            "preview_audio": saved_preview,
+        }
+    else:
+        data = {
+            "prompt": prompt_obj,
+            "metadata": metadata or {},
+            "preview_audio": saved_preview,
+        }
         
     torch.save(data, filepath)
     return safe_name
 
 
 def load_voice_profile(name: str):
-    """Loads voice prompt tensor and metadata from .pt file."""
+    """Loads voice prompt tensor/object and metadata from .pt file."""
     if not name:
         return None, {}
     filepath = os.path.join(_SAVED_VOICES_DIR, f"{name}.pt")
@@ -165,8 +180,15 @@ def load_voice_profile(name: str):
         return None, {}
     data = torch.load(filepath, map_location="cpu", weights_only=False)
     if isinstance(data, dict):
+        if "ref_audio_tokens" in data:
+            from omnivoice.models.omnivoice import VoiceClonePrompt
+            prompt = VoiceClonePrompt(
+                ref_audio_tokens=data["ref_audio_tokens"],
+                ref_text=data.get("ref_text", ""),
+                ref_rms=data.get("ref_rms", 0.0),
+            )
+            return prompt, data.get("metadata", {})
         return data.get("prompt"), data.get("metadata", {})
-    # Legacy format: directly tensor
     return data, {}
 
 
@@ -177,10 +199,14 @@ def get_voice_profile_preview(name: str):
     filepath = os.path.join(_SAVED_VOICES_DIR, f"{name}.pt")
     if not os.path.exists(filepath):
         return None
-    data = torch.load(filepath, map_location="cpu", weights_only=False)
-    if isinstance(data, dict) and "preview_audio" in data and os.path.exists(data["preview_audio"]):
-        return data["preview_audio"]
-    # Check for direct audio files with same name
+    try:
+        data = torch.load(filepath, map_location="cpu", weights_only=False)
+        if isinstance(data, dict) and "preview_audio" in data and data["preview_audio"] and os.path.exists(data["preview_audio"]):
+            return data["preview_audio"]
+    except Exception:
+        pass
+        
+    # Fallback: check for direct audio files with same name
     for ext in [".wav", ".mp3", ".ogg", ".flac"]:
         aud = os.path.join(_SAVED_VOICES_DIR, f"{name}{ext}")
         if os.path.exists(aud):
@@ -194,11 +220,17 @@ def delete_voice_profile(name: str):
         return False
     pt_path = os.path.join(_SAVED_VOICES_DIR, f"{name}.pt")
     if os.path.exists(pt_path):
-        os.remove(pt_path)
+        try:
+            os.remove(pt_path)
+        except Exception:
+            pass
     for ext in [".wav", ".mp3", ".ogg", ".flac"]:
         aud = os.path.join(_SAVED_VOICES_DIR, f"{name}{ext}")
         if os.path.exists(aud):
-            os.remove(aud)
+            try:
+                os.remove(aud)
+            except Exception:
+                pass
     return True
 
 
@@ -850,13 +882,13 @@ def build_demo(
                     
                     progress(0.3, desc=f"Đang trích xuất vector đặc trưng giọng '{name}'...")
                     try:
-                        prompt_tensor = model.create_voice_clone_prompt(
+                        prompt_obj = model.create_voice_clone_prompt(
                             ref_audio=audio_path,
                             ref_text=ref_txt or None,
                         )
                         saved_name = save_voice_profile(
                             name=name.strip(),
-                            prompt_tensor=prompt_tensor,
+                            prompt_obj=prompt_obj,
                             metadata={"ref_text": ref_txt or "", "created_at": str(os.path.getmtime(audio_path))},
                             preview_audio_path=audio_path,
                         )
@@ -865,6 +897,8 @@ def build_demo(
                         preview_aud = get_voice_profile_preview(saved_name)
                         return gr.update(choices=new_list, value=saved_name), preview_aud, f"✅ Đã lưu thành công hồ sơ giọng: '{saved_name}.pt'!"
                     except Exception as e:
+                        import traceback
+                        traceback.print_exc()
                         return gr.update(), None, f"❌ Lỗi khi trích xuất vector giọng: {e}"
 
                 def _on_vm_select(profile_nm):
