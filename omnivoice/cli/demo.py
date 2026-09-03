@@ -35,9 +35,86 @@ import gradio as gr
 import numpy as np
 import torch
 
+import json
+import urllib.request
+import urllib.error
+
 from omnivoice import OmniVoice, OmniVoiceGenerationConfig
 from omnivoice.utils.common import get_best_device
 from omnivoice.utils.lang_map import LANG_NAMES, lang_display_name
+
+
+# ---------------------------------------------------------------------------
+# Gemini AI Script Emotion & Style Analysis
+# ---------------------------------------------------------------------------
+def analyze_script_with_gemini(script_text: str, api_key: str = "", model_name: str = "gemini-2.5-flash"):
+    """
+    Analyzes each segment of the script to recommend emotion & voice instruction tags.
+    Calls Gemini API using native standard library (no extra pip deps needed).
+    """
+    key = (api_key or os.environ.get("GEMINI_API_KEY", "")).strip()
+    if not key:
+        raise ValueError("Chưa cung cấp Gemini API Key. Vui lòng nhập API Key vào ô cấu hình hoặc đặt biến môi trường GEMINI_API_KEY.")
+
+    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+
+    prompt = f"""Bạn là chuyên gia phân tích kịch bản lồng tiếng chuyên nghiệp.
+Nhiệm vụ của bạn: Đọc từng phân đoạn trong kịch bản dưới đây, dựa vào ngữ cảnh và nội dung thoại để phân tích:
+1. CẢM XÚC (Emotion): ví dụ: Hài hước / Sôi nổi / Vui vẻ / Nghiêm túc, chỉnh chu / Ngạc nhiên / Thì thầm / Buồn bã / Kịch tính, cao trào / Bình thản...
+2. HƯỚNG DẪN AI (Guidance): Tóm tắt hướng dẫn biểu cảm và nhịp điệu đọc (vd: High energy intro, Steady pace, Whisper secretly, Emphasize keywords, Slow down for impact, Excited tone...).
+
+Quy tắc quan trọng:
+- Trả về TOÀN BỘ kịch bản đã được cập nhật hoặc bổ sung các trường:
+  [#ID] THỜI GIAN: X -> Y
+  VĂN BẢN (JP/VN/...): ...
+  HIỆU ỨNG (SFX): ... (nếu có)
+  CẢM XÚC: <cảm xúc phân tích>
+  HƯỚNG DẪN AI: <hướng dẫn phân tích>
+  ------------------------------------------
+- Giữ nguyên cấu trúc timeline, số thứ tự phân đoạn và nội dung văn bản gốc.
+- Không thêm bất kỳ lời dẫn hay giải thích nào ngoài nội dung kịch bản đã được gắn thẻ.
+
+--- KỊCH BẢN GỐC ---
+{script_text}
+"""
+
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.3,
+        }
+    }
+
+    req = urllib.request.Request(
+        endpoint,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp_data = json.loads(resp.read().decode("utf-8"))
+            candidates = resp_data.get("candidates", [])
+            if candidates and "content" in candidates[0] and "parts" in candidates[0]["content"]:
+                out_text = candidates[0]["content"]["parts"][0]["text"]
+                # Clean markdown backticks if any
+                out_text = re.sub(r"^```(?:markdown|text)?\s*", "", out_text.strip(), flags=re.IGNORECASE)
+                out_text = re.sub(r"\s*```$", "", out_text.strip())
+                return out_text
+            else:
+                raise ValueError("Không nhận được phản hồi hợp lệ từ Gemini API.")
+    except urllib.error.HTTPError as he:
+        err_body = he.read().decode("utf-8", errors="ignore")
+        raise ValueError(f"Gemini API Error ({he.code}): {err_body}")
+    except Exception as e:
+        raise ValueError(f"Lỗi khi gọi Gemini API: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -159,45 +236,60 @@ def map_to_valid_instruct(emotion_str: str, guidance_str: str):
     valid_tags = []
     
     # Style
-    if any(k in combined for k in ["whisper", "thì thầm", "耳语"]):
+    if any(k in combined for k in ["whisper", "thì thầm", "bí mật", "secret", "tâm sự", "耳语"]):
         valid_tags.append("whisper")
         
-    # Pitch / Energy
-    if any(k in combined for k in ["high energy", "energetic", "excited", "surprised", "high pitch", "cao trào", "vui vẻ", "ngạc nhiên", "sôi nổi"]):
-        valid_tags.append("high pitch")
-    elif any(k in combined for k in ["very high pitch", "hét", "screaming"]):
+    # Pitch / Energy / Emotion
+    # High Pitch / Energy: Hài hước, vui tươi, phấn khích, ngạc nhiên, la hét, châm biếm, kịch tính cao
+    if any(k in combined for k in ["very high pitch", "hét", "screaming", "cực kỳ phấn khích"]):
         valid_tags.append("very high pitch")
-    elif any(k in combined for k in ["low pitch", "serious", "calm", "trầm", "nghiêm túc"]):
-        valid_tags.append("low pitch")
-    elif any(k in combined for k in ["very low pitch", "deep voice"]):
+    elif any(k in combined for k in [
+        "high energy", "energetic", "excited", "surprised", "high pitch", "cao trào",
+        "vui vẻ", "vui tươi", "hài hước", "funny", "humorous", "comedy", "ngạc nhiên",
+        "sôi nổi", "hào hứng", "nhiệt huyết", "châm biếm", "dí dỏm", "chúc mừng",
+        "cười", "laughing", "tươi tắn"
+    ]):
+        valid_tags.append("high pitch")
+    # Very Low Pitch: Trầm tối, huyền bí, ma mị, giọng đáy
+    elif any(k in combined for k in ["very low pitch", "deep voice", "trầm sâu", "ma mị", "u ám", "rùng rợn"]):
         valid_tags.append("very low pitch")
-    elif any(k in combined for k in ["informative", "steady pace", "steady", "moderate pitch", "bình thường"]):
+    # Low Pitch: Nghiêm túc, chỉnh chu, tin tức, buồn bã, điềm tĩnh, suy tư, điện ảnh
+    elif any(k in combined for k in [
+        "low pitch", "serious", "calm", "trầm", "nghiêm túc", "chỉnh chu", "buồn",
+        "sad", "sadness", "u buồn", "suy tư", "thất vọng", "lắng đọng", "chững chạc",
+        "thuyết minh", "chính luận", "chuyên nghiệp", "tĩnh lặng"
+    ]):
+        valid_tags.append("low pitch")
+    # Moderate Pitch: Bình thường, tự nhiên, tin tức chuẩn, vừa phải
+    elif any(k in combined for k in ["informative", "steady pace", "steady", "moderate pitch", "bình thường", "tự nhiên", "chuẩn mực", "ổn định"]):
         valid_tags.append("moderate pitch")
         
     # Age
-    if any(k in combined for k in ["child", "kid", "trẻ em", "em bé"]):
+    if any(k in combined for k in ["child", "kid", "trẻ em", "em bé", "nhí"]):
         valid_tags.append("child")
-    elif any(k in combined for k in ["teenager", "teen", "thiếu niên"]):
+    elif any(k in combined for k in ["teenager", "teen", "thiếu niên", "học sinh"]):
         valid_tags.append("teenager")
-    elif any(k in combined for k in ["elderly", "old", "người già", "ông lão", "bà lão"]):
+    elif any(k in combined for k in ["elderly", "old", "người già", "ông lão", "bà lão", "lớn tuổi"]):
         valid_tags.append("elderly")
-    elif any(k in combined for k in ["young adult", "young", "trẻ"]):
+    elif any(k in combined for k in ["young adult", "young", "trẻ", "thanh niên"]):
         valid_tags.append("young adult")
+    elif any(k in combined for k in ["middle-aged", "trung niên"]):
+        valid_tags.append("middle-aged")
         
     # Gender
-    if any(k in combined for k in ["female", "woman", "girl", "nữ", "gái"]):
+    if any(k in combined for k in ["female", "woman", "girl", "nữ", "gái", "chị", "cô"]):
         valid_tags.append("female")
-    elif any(k in combined for k in ["male", "man", "boy", "nam", "trai"]):
+    elif any(k in combined for k in ["male", "man", "boy", "nam", "trai", "anh", "chú"]):
         valid_tags.append("male")
         
     # Accents
-    if "japanese" in combined or "tiếng nhật" in combined:
+    if "japanese" in combined or "tiếng nhật" in combined or "nhật" in combined:
         valid_tags.append("japanese accent")
-    elif "british" in combined:
+    elif "british" in combined or "anh" in combined:
         valid_tags.append("british accent")
-    elif "american" in combined:
+    elif "american" in combined or "mỹ" in combined:
         valid_tags.append("american accent")
-    elif "chinese" in combined:
+    elif "chinese" in combined or "trung" in combined:
         valid_tags.append("chinese accent")
 
     filtered = []
@@ -753,6 +845,88 @@ CẢM XÚC: Friendly
 HƯỚNG DẪN AI: Ask a question for engagement
 ------------------------------------------"""
                         )
+
+                        gr.Markdown("### 🤖 Tự động nhận diện cảm xúc kịch bản bằng Gemini AI")
+                        with gr.Accordion("⚙️ Cấu hình Gemini Flash AI", open=False):
+                            with gr.Row():
+                                gemini_api_key = gr.Textbox(
+                                    label="Gemini API Key",
+                                    type="password",
+                                    placeholder="Dán Google Gemini API Key vào đây (hoặc để trống nếu đã set ENV)...",
+                                    value=os.environ.get("GEMINI_API_KEY", ""),
+                                    scale=3
+                                )
+                                gemini_model = gr.Dropdown(
+                                    label="Phiên bản mô hình",
+                                    choices=["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"],
+                                    value="gemini-2.5-flash",
+                                    scale=1
+                                )
+                        
+                        gemini_analyze_btn = gr.Button("✨ Phân tích kịch bản & Gợi ý cảm xúc (Gemini AI)", variant="secondary")
+
+                        with gr.Group(visible=False) as gemini_preview_group:
+                            gr.Markdown("### 📋 Kết quả gợi ý từ Gemini AI (Xem trước & Chấp nhận)")
+                            gemini_suggested_script = gr.Textbox(
+                                label="Kịch bản sau khi Gemini gắn thẻ cảm xúc & hướng dẫn AI",
+                                lines=8,
+                                interactive=True,
+                            )
+                            with gr.Row():
+                                gemini_apply_btn = gr.Button("✅ Đồng ý & Áp dụng vào kịch bản chính", variant="primary", scale=2)
+                                gemini_cancel_btn = gr.Button("❌ Hủy bỏ", variant="secondary", scale=1)
+
+                        gr.Markdown("💡 **Hoặc bấm gợi ý cảm xúc nhanh thủ công:**")
+                        with gr.Row():
+                            preset_btn_fun = gr.Button("😂 Hài hước / Sôi nổi", size="sm")
+                            preset_btn_serious = gr.Button("🧐 Nghiêm túc / Chỉnh chu", size="sm")
+                            preset_btn_whisper = gr.Button("🤫 Thì thầm / Bí ẩn", size="sm")
+                            preset_btn_dramatic = gr.Button("🔥 Kịch tính / Cao trào", size="sm")
+                            preset_btn_calm = gr.Button("☕ Nhẹ nhàng / Bình thản", size="sm")
+
+                        def _append_preset(script_text, emotion_str, guide_str):
+                            preset_template = f"\nCẢM XÚC: {emotion_str}\nHƯỚNG DẪN AI: {guide_str}\n"
+                            return (script_text or "") + preset_template
+
+                        preset_btn_fun.click(lambda s: _append_preset(s, "Hài hước, vui vẻ", "High energy intro"), inputs=[sc_script], outputs=[sc_script])
+                        preset_btn_serious.click(lambda s: _append_preset(s, "Nghiêm túc, chỉnh chu", "Steady pace, formal"), inputs=[sc_script], outputs=[sc_script])
+                        preset_btn_whisper.click(lambda s: _append_preset(s, "Thì thầm", "Whisper, secret voice"), inputs=[sc_script], outputs=[sc_script])
+                        preset_btn_dramatic.click(lambda s: _append_preset(s, "Kịch tính, cao trào", "High pitch, exciting"), inputs=[sc_script], outputs=[sc_script])
+                        preset_btn_calm.click(lambda s: _append_preset(s, "Bình thường, tự nhiên", "Calm, steady pace"), inputs=[sc_script], outputs=[sc_script])
+
+                        def _on_gemini_analyze(script_text, api_key, model_nm, progress=gr.Progress()):
+                            if not script_text or not script_text.strip():
+                                gr.Warning("Vui lòng dán kịch bản vào ô trước khi phân tích.")
+                                return gr.update(visible=False), "", "Vui lòng nhập kịch bản trước."
+                            progress(0.3, desc="Đang gửi kịch bản đến Gemini AI để phân tích ngữ cảnh...")
+                            try:
+                                suggested = analyze_script_with_gemini(script_text, api_key, model_nm)
+                                progress(1.0, desc="Đã phân tích xong cảm xúc cho các phân đoạn!")
+                                return gr.update(visible=True), suggested, "✅ Gemini đã phân tích xong! Vui lòng xem trước và bấm 'Đồng ý & Áp dụng'."
+                            except Exception as e:
+                                gr.Warning(f"Lỗi phân tích Gemini: {e}")
+                                return gr.update(visible=False), "", f"Lỗi Gemini: {e}"
+
+                        def _on_gemini_apply(suggested_text):
+                            return suggested_text, gr.update(visible=False), "✅ Đã áp dụng kịch bản có gắn thẻ cảm xúc từ Gemini!"
+
+                        def _on_gemini_cancel():
+                            return gr.update(visible=False), "Đã hủy gợi ý của Gemini."
+
+                        gemini_analyze_btn.click(
+                            _on_gemini_analyze,
+                            inputs=[sc_script, gemini_api_key, gemini_model],
+                            outputs=[gemini_preview_group, gemini_suggested_script, sc_status]
+                        )
+                        gemini_apply_btn.click(
+                            _on_gemini_apply,
+                            inputs=[gemini_suggested_script],
+                            outputs=[sc_script, gemini_preview_group, sc_status]
+                        )
+                        gemini_cancel_btn.click(
+                            _on_gemini_cancel,
+                            outputs=[gemini_preview_group, sc_status]
+                        )
                         
                         (
                             sc_ns,
@@ -774,43 +948,46 @@ HƯỚNG DẪN AI: Ask a question for engagement
                             sc_page_info = gr.Markdown("### 📑 Đang xem: Phân đoạn 1 - 5", elem_classes="text-center")
                             sc_next_view_btn = gr.Button("Đợt sau ▶", size="sm", scale=1)
 
-                        sc_audio1 = gr.Audio(label="Segment 1 Output", type="numpy")
-                        sc_audio2 = gr.Audio(label="Segment 2 Output", type="numpy")
-                        sc_audio3 = gr.Audio(label="Segment 3 Output", type="numpy")
-                        sc_audio4 = gr.Audio(label="Segment 4 Output", type="numpy")
-                        sc_audio5 = gr.Audio(label="Segment 5 Output", type="numpy")
+                        with gr.Group():
+                            with gr.Row():
+                                sc_audio1 = gr.Audio(label="Segment 1 Output", type="numpy", scale=4)
+                                sc_retry1 = gr.Button("🔄 Thử lại", size="sm", scale=1)
+                            with gr.Row():
+                                sc_audio2 = gr.Audio(label="Segment 2 Output", type="numpy", scale=4)
+                                sc_retry2 = gr.Button("🔄 Thử lại", size="sm", scale=1)
+                            with gr.Row():
+                                sc_audio3 = gr.Audio(label="Segment 3 Output", type="numpy", scale=4)
+                                sc_retry3 = gr.Button("🔄 Thử lại", size="sm", scale=1)
+                            with gr.Row():
+                                sc_audio4 = gr.Audio(label="Segment 4 Output", type="numpy", scale=4)
+                                sc_retry4 = gr.Button("🔄 Thử lại", size="sm", scale=1)
+                            with gr.Row():
+                                sc_audio5 = gr.Audio(label="Segment 5 Output", type="numpy", scale=4)
+                                sc_retry5 = gr.Button("🔄 Thử lại", size="sm", scale=1)
                         
                         sc_zip = gr.File(label="Download All WAVs (ZIP) / Tải xuống tất cả các tệp (ZIP)")
                         sc_parsed_markdown = gr.Markdown(label="Parsed Script Summary / Tóm tắt kịch bản đã phân tích")
-                        sc_status = gr.Textbox(label="Status / Trạng thái", lines=5)
+                        sc_status = gr.Textbox(label="Status & Live Logs / Tiến trình trực tiếp", lines=5)
 
                 def _generate_segments_core(
                     lang, ref_audio, ref_text, script_text,
                     ns, gs, dn, sp, du, pp, po,
-                    target_indices, current_page, all_cache, temp_dir
+                    target_indices, current_page, all_cache, temp_dir,
+                    progress=gr.Progress()
                 ):
                     if not script_text or not script_text.strip():
-                        return (
-                            gr.update(), gr.update(), gr.update(), gr.update(), gr.update(),
-                            None, "", "Error: Script is empty.", "### 📑 Chưa có kịch bản",
-                            current_page, all_cache, temp_dir
-                        )
+                        yield _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
+                        return
                     
                     try:
                         segments = parse_script(script_text)
                     except Exception as e:
-                        return (
-                            gr.update(), gr.update(), gr.update(), gr.update(), gr.update(),
-                            None, "", f"Error parsing script: {e}", "### 📑 Lỗi phân tích",
-                            current_page, all_cache, temp_dir
-                        )
+                        yield _render_script_page(current_page, [], all_cache or {}, temp_dir or "", None, f"Error parsing script: {e}")
+                        return
                         
                     if not segments:
-                        return (
-                            gr.update(), gr.update(), gr.update(), gr.update(), gr.update(),
-                            None, "", "Error: No valid segments found.", "### 📑 Không tìm thấy phân đoạn",
-                            current_page, all_cache, temp_dir
-                        )
+                        yield _render_script_page(current_page, [], all_cache or {}, temp_dir or "", None, "Error: No valid segments found.")
+                        return
                     
                     if all_cache is None:
                         all_cache = {}
@@ -826,16 +1003,14 @@ HƯỚNG DẪN AI: Ask a question for engagement
                                 ref_text=ref_text or None,
                             )
                         except Exception as e:
-                            return (
-                                gr.update(), gr.update(), gr.update(), gr.update(), gr.update(),
-                                None, "", f"Error encoding reference audio: {e}", "### 📑 Lỗi giọng mẫu",
-                                current_page, all_cache, temp_dir
-                            )
+                            yield _render_script_page(current_page, segments, all_cache, temp_dir, None, f"Error encoding reference audio: {e}")
+                            return
                     
                     mode = "clone" if (ref_audio and str(ref_audio).strip()) else "design"
                     statuses = []
+                    total_targets = len(target_indices)
 
-                    for idx in target_indices:
+                    for step_i, idx in enumerate(target_indices):
                         if idx >= len(segments):
                             continue
                         seg = segments[idx]
@@ -843,6 +1018,12 @@ HƯỚNG DẪN AI: Ask a question for engagement
                         text = seg["text"]
                         duration_val = seg["duration"]
                         instruct_val = seg["valid_instruct"]
+                        
+                        # Show current progress and exact text being generated
+                        progress(
+                            (step_i) / max(1, total_targets),
+                            desc=f"[{step_i + 1}/{total_targets}] Đang sinh Segment #{seg_id}: {text[:35]}..."
+                        )
 
                         try:
                             res, stat = _gen(
@@ -862,7 +1043,7 @@ HƯỚNG DẪN AI: Ask a question for engagement
                                 prompt,
                             )
                             all_cache[idx] = (res, stat)
-                            statuses.append(f"Segment {seg_id}: {stat}")
+                            statuses.append(f"Segment #{seg_id} [Thành công]: {stat}")
 
                             if res and res[1] is not None:
                                 import soundfile as sf
@@ -872,18 +1053,22 @@ HƯỚNG DẪN AI: Ask a question for engagement
                             import traceback
                             traceback.print_exc()
                             all_cache[idx] = (None, f"Error: {e}")
-                            statuses.append(f"Segment {seg_id}: Error: {e}")
+                            statuses.append(f"Segment #{seg_id} [LỖI]: {e} (Các đoạn khác vẫn được bảo toàn)")
 
-                    # Update zip file with all generated wavs in temp_dir
-                    zip_path = None
-                    wav_files = [os.path.join(temp_dir, f) for f in os.listdir(temp_dir) if f.endswith(".wav")]
-                    if wav_files:
-                        zip_path = os.path.join(temp_dir, "all_segments.zip")
-                        with zipfile.ZipFile(zip_path, 'w') as zipf:
-                            for wp in wav_files:
-                                zipf.write(wp, os.path.basename(wp))
+                        # Update zip file with all generated wavs in temp_dir incrementally
+                        zip_path = None
+                        wav_files = [os.path.join(temp_dir, f) for f in os.listdir(temp_dir) if f.endswith(".wav")]
+                        if wav_files:
+                            zip_path = os.path.join(temp_dir, "all_segments.zip")
+                            with zipfile.ZipFile(zip_path, 'w') as zipf:
+                                for wp in wav_files:
+                                    zipf.write(wp, os.path.basename(wp))
 
-                    return _render_script_page(current_page, segments, all_cache, temp_dir, zip_path, "\n".join(statuses))
+                        # Live yield update after EACH segment
+                        yield _render_script_page(current_page, segments, all_cache, temp_dir, zip_path, "\n".join(statuses))
+
+                    progress(1.0, desc="Hoàn tất sinh giọng!")
+                    yield _render_script_page(current_page, segments, all_cache, temp_dir, zip_path, "\n".join(statuses))
 
                 def _render_script_page(page_idx, segments, all_cache, temp_dir, zip_path, status_text=""):
                     N = len(segments)
@@ -900,7 +1085,7 @@ HƯỚNG DẪN AI: Ask a question for engagement
                             seg = segments[actual_idx]
                             cached = all_cache.get(actual_idx, (None, ""))
                             audio_val = cached[0]
-                            audio_label = f"Phân đoạn {seg['id']} ({seg['duration']}s): {seg['text'][:25]}..."
+                            audio_label = f"Phân đoạn #{seg['id']} ({seg['duration']}s): {seg['text'][:25]}..."
                             audio_updates.append(gr.update(value=audio_val, label=audio_label, visible=True))
                         else:
                             audio_updates.append(gr.update(value=None, label="Trống", visible=False))
@@ -909,10 +1094,10 @@ HƯỚNG DẪN AI: Ask a question for engagement
                     for idx, seg in enumerate(segments):
                         is_current = (start_idx <= idx < end_idx)
                         prefix = "👉 " if is_current else "- "
-                        done_icon = " ✅" if idx in all_cache and all_cache[idx][0] is not None else ""
+                        done_icon = " ✅" if idx in all_cache and all_cache[idx][0] is not None else (" ❌ (Lỗi)" if idx in all_cache else "")
                         inst_display = f"*{seg['raw_instruct']}*" if seg['raw_instruct'] else ""
                         mapped_display = f" [`{seg['valid_instruct']}`]" if seg['valid_instruct'] else ""
-                        parsed_summary += f"{prefix}**Segment {seg['id']}** ({seg['duration']}s): {inst_display}{mapped_display} - \"{seg['text'][:30]}...\"{done_icon}\n"
+                        parsed_summary += f"{prefix}**Segment #{seg['id']}** ({seg['duration']}s): {inst_display}{mapped_display} - \"{seg['text'][:30]}...\"{done_icon}\n"
 
                     page_info_md = f"### 📑 Đang xem: Phân đoạn {start_idx + 1} - {end_idx} / Tổng: {N} (Trang {page_idx + 1}/{P})"
 
@@ -927,31 +1112,46 @@ HƯỚNG DẪN AI: Ask a question for engagement
                         page_idx, all_cache, temp_dir
                     )
 
-                def _on_generate_current(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir):
+                def _on_generate_current(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir, progress=gr.Progress()):
                     segments = parse_script(script_text) if script_text else []
                     if not segments:
-                        return _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
+                        yield _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
+                        return
                     start_idx = page_idx * 5
                     target_indices = list(range(start_idx, min(start_idx + 5, len(segments))))
-                    return _generate_segments_core(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, target_indices, page_idx, all_cache, temp_dir)
+                    for res in _generate_segments_core(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, target_indices, page_idx, all_cache, temp_dir, progress):
+                        yield res
 
-                def _on_continue_next(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir):
+                def _on_continue_next(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir, progress=gr.Progress()):
                     segments = parse_script(script_text) if script_text else []
                     if not segments:
-                        return _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
+                        yield _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
+                        return
                     N = len(segments)
                     P = max(1, (N + 4) // 5)
                     next_page = min(page_idx + 1, P - 1)
                     start_idx = next_page * 5
                     target_indices = list(range(start_idx, min(start_idx + 5, N)))
-                    return _generate_segments_core(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, target_indices, next_page, all_cache, temp_dir)
+                    for res in _generate_segments_core(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, target_indices, next_page, all_cache, temp_dir, progress):
+                        yield res
 
-                def _on_generate_all(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir):
+                def _on_generate_all(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir, progress=gr.Progress()):
                     segments = parse_script(script_text) if script_text else []
                     if not segments:
-                        return _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
+                        yield _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
+                        return
                     target_indices = list(range(len(segments)))
-                    return _generate_segments_core(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, target_indices, page_idx, all_cache, temp_dir)
+                    for res in _generate_segments_core(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, target_indices, page_idx, all_cache, temp_dir, progress):
+                        yield res
+
+                def _on_retry_single(slot_idx, lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir, progress=gr.Progress()):
+                    segments = parse_script(script_text) if script_text else []
+                    actual_idx = page_idx * 5 + slot_idx
+                    if not segments or actual_idx >= len(segments):
+                        yield _render_script_page(page_idx, segments, all_cache or {}, temp_dir or "", None, f"Phân đoạn {actual_idx + 1} không tồn tại.")
+                        return
+                    for res in _generate_segments_core(lang, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, [actual_idx], page_idx, all_cache, temp_dir, progress):
+                        yield res
 
                 def _on_prev_view(script_text, page_idx, all_cache, temp_dir):
                     segments = parse_script(script_text) if script_text else []
@@ -979,6 +1179,12 @@ HƯỚNG DẪN AI: Ask a question for engagement
                 sc_btn.click(_on_generate_current, inputs=gen_inputs, outputs=gen_outputs)
                 sc_next_btn.click(_on_continue_next, inputs=gen_inputs, outputs=gen_outputs)
                 sc_all_btn.click(_on_generate_all, inputs=gen_inputs, outputs=gen_outputs)
+
+                sc_retry1.click(lambda *args: _on_retry_single(0, *args), inputs=gen_inputs, outputs=gen_outputs)
+                sc_retry2.click(lambda *args: _on_retry_single(1, *args), inputs=gen_inputs, outputs=gen_outputs)
+                sc_retry3.click(lambda *args: _on_retry_single(2, *args), inputs=gen_inputs, outputs=gen_outputs)
+                sc_retry4.click(lambda *args: _on_retry_single(3, *args), inputs=gen_inputs, outputs=gen_outputs)
+                sc_retry5.click(lambda *args: _on_retry_single(4, *args), inputs=gen_inputs, outputs=gen_outputs)
 
                 sc_prev_view_btn.click(
                     _on_prev_view,
