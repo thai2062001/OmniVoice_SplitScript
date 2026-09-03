@@ -430,10 +430,10 @@ def build_demo(
             )
         return ns, gs, dn, sp, du, pp, po
 
-    with gr.Blocks(theme=theme, css=css, title="OmniVoice Demo") as demo:
+    with gr.Blocks(theme=theme, css=css, title="mypage") as demo:
         gr.Markdown(
             """
-# OmniVoice Demo
+# mypage
 
 State-of-the-art text-to-speech model for **600+ languages**, supporting:
 
