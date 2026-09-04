@@ -137,74 +137,125 @@ def get_theme_and_css():
     css = """
     :root {
         --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --brand-primary: #18181b;
+        --brand-accent: #2563eb;
+        --surface-card: #ffffff;
+        --border-subtle: #e4e4e7;
     }
     .gradio-container {
         max-width: 1440px !important;
         margin: 0 auto !important;
         font-family: var(--font-sans) !important;
+        padding: 16px 24px !important;
     }
     
     /* Header hero styling */
     .app-header {
-        background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
-        border: 1px solid #e5e5e5;
-        border-radius: 12px;
+        background: linear-gradient(135deg, #09090b 0%, #18181b 50%, #27272a 100%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
         padding: 24px 32px;
-        margin-bottom: 24px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-    }
-    .dark .app-header {
-        background: linear-gradient(180deg, #171717 0%, #0a0a0a 100%);
-        border: 1px solid #262626;
+        margin-bottom: 20px;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        color: #ffffff;
     }
     .app-title {
-        font-size: 24px !important;
-        font-weight: 700 !important;
+        font-size: 26px !important;
+        font-weight: 800 !important;
         letter-spacing: -0.03em !important;
-        margin: 0 0 4px 0 !important;
-        color: #111111 !important;
-    }
-    .dark .app-title {
+        margin: 0 0 6px 0 !important;
         color: #ffffff !important;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
     .app-subtitle {
         font-size: 14px !important;
-        color: #737373 !important;
+        color: #a1a1aa !important;
         margin: 0 !important;
+        line-height: 1.5;
     }
 
     /* Tabs refinement */
     .tabs {
-        border-bottom: 1px solid #e5e5e5 !important;
+        border-bottom: 2px solid #e4e4e7 !important;
+        margin-bottom: 20px !important;
+    }
+    .dark .tabs {
+        border-bottom: 2px solid #27272a !important;
     }
     .tab-nav button {
         font-weight: 600 !important;
         font-size: 14px !important;
         letter-spacing: -0.01em !important;
-        padding: 10px 18px !important;
-        border-radius: 8px 8px 0 0 !important;
+        padding: 12px 20px !important;
+        border-radius: 10px 10px 0 0 !important;
+        transition: all 0.2s ease !important;
+        border: none !important;
+    }
+    .tab-nav button:hover {
+        background: rgba(0, 0, 0, 0.04) !important;
+    }
+    .dark .tab-nav button:hover {
+        background: rgba(255, 255, 255, 0.05) !important;
     }
     .tab-nav button.selected {
-        border-bottom: 2px solid #171717 !important;
-        color: #171717 !important;
+        background: #ffffff !important;
+        border-bottom: 3px solid #2563eb !important;
+        color: #2563eb !important;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.03);
     }
     .dark .tab-nav button.selected {
-        border-bottom: 2px solid #ffffff !important;
-        color: #ffffff !important;
+        background: #18181b !important;
+        border-bottom: 3px solid #3b82f6 !important;
+        color: #60a5fa !important;
     }
 
-    /* Buttons */
+    /* Buttons Modern Look */
     button {
         font-weight: 600 !important;
         letter-spacing: -0.01em !important;
-        transition: all 0.15s ease-in-out !important;
+        border-radius: 10px !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
-    button:hover {
+    button.primary {
+        background: linear-gradient(135deg, #18181b 0%, #27272a 100%) !important;
+        color: #ffffff !important;
+        border: 1px solid #3f3f46 !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+    }
+    button.primary:hover {
         transform: translateY(-1px);
-        box-shadow: 0 2px 6px rgba(0,0,0,0.06) !important;
+        box-shadow: 0 6px 14px rgba(0,0,0,0.18) !important;
+        filter: brightness(1.1);
     }
-    button:active {
-        transform: translateY(0);
+    button.secondary {
+        background: #f4f4f5 !important;
+        border: 1px solid #e4e4e7 !important;
+        color: #18181b !important;
+    }
+    .dark button.secondary {
+        background: #27272a !important;
+        border: 1px solid #3f3f46 !important;
+        color: #f4f4f5 !important;
+    }
+    button.secondary:hover {
+        background: #e4e4e7 !important;
+        transform: translateY(-1px);
+    }
+    button.stop {
+        background: #fee2e2 !important;
+        color: #dc2626 !important;
+        border: 1px solid #fecaca !important;
+    }
+    .dark button.stop {
+        background: #450a0a !important;
+        color: #f87171 !important;
+        border: 1px solid #7f1d1d !important;
+    }
+    button.stop:hover {
+        background: #fecaca !important;
+        transform: translateY(-1px);
     }
     
     /* Preset Chips */
@@ -212,25 +263,42 @@ def get_theme_and_css():
         font-size: 13px !important;
         font-weight: 500 !important;
         border-radius: 20px !important;
-        padding: 4px 14px !important;
-        background: #f5f5f5 !important;
-        border: 1px solid #e5e5e5 !important;
-        color: #262626 !important;
+        padding: 5px 14px !important;
+        background: #f4f4f5 !important;
+        border: 1px solid #e4e4e7 !important;
+        color: #27272a !important;
+        cursor: pointer;
     }
     .preset-chip:hover {
-        background: #171717 !important;
+        background: #18181b !important;
         color: #ffffff !important;
-        border-color: #171717 !important;
+        border-color: #18181b !important;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
     .dark .preset-chip {
-        background: #262626 !important;
-        border-color: #404040 !important;
-        color: #e5e5e5 !important;
+        background: #27272a !important;
+        border-color: #3f3f46 !important;
+        color: #e4e4e7 !important;
     }
     .dark .preset-chip:hover {
         background: #ffffff !important;
-        color: #171717 !important;
+        color: #18181b !important;
         border-color: #ffffff !important;
+    }
+
+    /* UX Cards / Panels */
+    .ux-card {
+        background: #ffffff;
+        border: 1px solid #e4e4e7;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+    .dark .ux-card {
+        background: #18181b;
+        border: 1px solid #27272a;
     }
 
     /* Audio components */
@@ -240,15 +308,43 @@ def get_theme_and_css():
     
     /* Segment Audio Card Box */
     .segment-card {
-        border: 1px solid #e5e5e5;
-        border-radius: 10px;
-        padding: 12px;
+        border: 1px solid #e4e4e7;
+        border-radius: 12px;
+        padding: 14px 16px;
         background: #ffffff;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        transition: all 0.2s ease;
+    }
+    .segment-card:hover {
+        border-color: #cbd5e1;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.05);
     }
     .dark .segment-card {
-        border: 1px solid #262626;
-        background: #171717;
+        border: 1px solid #27272a;
+        background: #18181b;
+    }
+    .dark .segment-card:hover {
+        border-color: #3f3f46;
+    }
+
+    /* Step Badge Numbers */
+    .step-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        background: #18181b;
+        color: #ffffff;
+        border-radius: 50%;
+        font-size: 13px;
+        font-weight: 700;
+        margin-right: 8px;
+    }
+    .dark .step-badge {
+        background: #3b82f6;
+        color: #ffffff;
     }
 
     /* Clean subtle scrollbars */
@@ -257,11 +353,11 @@ def get_theme_and_css():
         height: 6px;
     }
     ::-webkit-scrollbar-thumb {
-        background: #d4d4d4;
+        background: #d4d4d8;
         border-radius: 4px;
     }
     .dark ::-webkit-scrollbar-thumb {
-        background: #404040;
+        background: #3f3f46;
     }
     """
     return theme, css

@@ -8,47 +8,60 @@ def build_voice_design_tab(_gen):
     with gr.TabItem("🎨 Thiết Kế Giọng (Voice Design)"):
         gr.Markdown(
             """
-### 🎨 Thiết Kế Giọng Nói AI Hoàn Toàn Mới (Voice Design)
-*Tạo giọng đọc nhân tạo từ số 0 bằng cách kết hợp các đặc tính (Giới tính, Độ tuổi, Âm điệu, Phong cách, Accent) mà **không cần audio mẫu**.*
+<div style="margin-bottom: 12px;">
+  <h2 style="margin: 0 0 4px 0; font-size: 20px; font-weight: 700;">🎨 Thiết Kế Giọng Nói AI Mới (Voice Design)</h2>
+  <p style="margin: 0; color: #71717a; font-size: 14px;">Tạo một giọng đọc hoàn toàn mới từ số 0 bằng cách phối hợp các đặc tính (Giới tính, Độ tuổi, Âm điệu, Phong cách, Accent) mà <b>không cần bất kỳ audio mẫu nào</b>.</p>
+</div>
 """
         )
         with gr.Row():
+            # Left Card: Attributes & Text
             with gr.Column(scale=1):
-                vd_text = gr.Textbox(
-                    label="Văn bản cần đọc (Text to Synthesize)",
-                    lines=4,
-                    placeholder="Nhập nội dung bạn muốn giọng AI đọc vào đây...",
-                )
-                vd_lang = create_lang_dropdown("Ngôn ngữ (Language)")
-
-                _AUTO = "Tự động (Auto)"
-                vd_groups = []
-                for _cat, _choices in _CATEGORIES.items():
-                    vd_groups.append(
-                        gr.Dropdown(
-                            label=_cat,
-                            choices=[_AUTO] + _choices,
-                            value=_AUTO,
-                            info=_ATTR_INFO.get(_cat),
-                        )
+                with gr.Group(elem_classes="ux-card"):
+                    gr.Markdown("### 📝 Bước 1: Nội Dung Cần Đọc")
+                    vd_text = gr.Textbox(
+                        label="Văn bản",
+                        lines=4,
+                        placeholder="Nhập nội dung bạn muốn giọng AI thiết kế đọc vào đây...",
                     )
+                    vd_lang = create_lang_dropdown("Ngôn ngữ (Language)")
 
-                (
-                    vd_ns,
-                    vd_gs,
-                    vd_dn,
-                    vd_sp,
-                    vd_du,
-                    vd_pp,
-                    vd_po,
-                ) = create_gen_settings()
-                vd_btn = gr.Button("🚀 Bắt Đầu Tạo Giọng (Voice Design)", variant="primary")
+                with gr.Group(elem_classes="ux-card"):
+                    gr.Markdown("### 🎭 Bước 2: Thiết Lập Đặc Tính Giọng Nói")
+                    _AUTO = "Tự động (Auto)"
+                    vd_groups = []
+                    for _cat, _choices in _CATEGORIES.items():
+                        vd_groups.append(
+                            gr.Dropdown(
+                                label=_cat,
+                                choices=[_AUTO] + _choices,
+                                value=_AUTO,
+                                info=_ATTR_INFO.get(_cat),
+                            )
+                        )
+
+                with gr.Group(elem_classes="ux-card"):
+                    gr.Markdown("### ⚙️ Bước 3: Cài Đặt Sinh Giọng")
+                    (
+                        vd_ns,
+                        vd_gs,
+                        vd_dn,
+                        vd_sp,
+                        vd_du,
+                        vd_pp,
+                        vd_po,
+                    ) = create_gen_settings()
+                    vd_btn = gr.Button("🚀 Bắt Đầu Thiết Kế & Tạo Giọng", variant="primary", size="lg")
+
+            # Right Card: Output
             with gr.Column(scale=1):
-                vd_audio = gr.Audio(
-                    label="🔊 Kết Quả Âm Thanh",
-                    type="numpy",
-                )
-                vd_status = gr.Textbox(label="Trạng thái", lines=2)
+                with gr.Group(elem_classes="ux-card"):
+                    gr.Markdown("### 🔊 Kết Quả Âm Thanh")
+                    vd_audio = gr.Audio(
+                        label="File âm thanh đã thiết kế",
+                        type="numpy",
+                    )
+                    vd_status = gr.Textbox(label="Trạng thái & Tiến trình", lines=3)
 
         def _build_instruct(groups):
             """Extract instruct text from UI dropdowns."""

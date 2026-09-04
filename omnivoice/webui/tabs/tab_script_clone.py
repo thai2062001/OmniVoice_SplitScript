@@ -20,65 +20,77 @@ def build_script_clone_tab(model, _gen):
         sc_cache_state = gr.State(value={})
         sc_temp_dir_state = gr.State(value="")
 
+        gr.Markdown(
+            """
+<div style="margin-bottom: 12px;">
+  <h2 style="margin: 0 0 4px 0; font-size: 20px; font-weight: 700;">🎬 Sinh Giọng Theo Kịch Bản Dài (Script Clone)</h2>
+  <p style="margin: 0; color: #71717a; font-size: 14px;">Tự động phân tích ngữ cảnh cảm xúc từng câu bằng Gemini AI, sinh giọng theo đợt 10 câu, tiếp tục tiến trình không lo đứt đoạn và hỗ trợ thử lại từng câu.</p>
+</div>
+"""
+        )
+
         with gr.Row():
+            # Left Column: Setup & Script Input
             with gr.Column(scale=1):
-                sc_lang = create_lang_dropdown("Ngôn ngữ (Language)")
-                
-                gr.Markdown("### 1. Chọn Giọng Mẫu (Voice Profile / Audio Mẫu)")
-                sc_source_type = gr.Radio(
-                    choices=["🎙️ Sử dụng Hồ sơ giọng có sẵn (.pt)", "📤 Tải lên Audio mẫu mới"],
-                    value="🎙️ Sử dụng Hồ sơ giọng có sẵn (.pt)" if list_voice_profiles() else "📤 Tải lên Audio mẫu mới",
-                    label="Nguồn Giọng Mẫu (Voice Source)"
-                )
-
-                with gr.Group(visible=bool(list_voice_profiles())) as sc_preset_group:
-                    with gr.Row():
-                        sc_saved_profile = gr.Dropdown(
-                            label="Chọn Hồ sơ giọng cố định",
-                            choices=list_voice_profiles(),
-                            value=list_voice_profiles()[0] if list_voice_profiles() else None,
-                            scale=3
-                        )
-                        sc_preset_preview = gr.Audio(
-                            label="Nghe thử",
-                            value=get_voice_profile_preview(list_voice_profiles()[0]) if list_voice_profiles() else None,
-                            interactive=False,
-                            scale=2,
-                            elem_classes="compact-audio"
-                        )
-
-                with gr.Group(visible=not bool(list_voice_profiles())) as sc_custom_group:
-                    sc_ref_audio = gr.Audio(
-                        label="File âm thanh mẫu dùng chung (Reference Audio)",
-                        type="filepath",
-                        elem_classes="compact-audio",
-                    )
-                    sc_ref_text = gr.Textbox(
-                        label="Văn bản giọng mẫu (Tùy chọn)",
-                        placeholder="Để trống nếu muốn tự động nhận diện (ASR).",
+                with gr.Group(elem_classes="ux-card"):
+                    gr.Markdown("### 🎙️ Bước 1: Chọn Giọng Mẫu Đọc Kịch Bản")
+                    sc_source_type = gr.Radio(
+                        choices=["🎙️ Sử dụng Hồ sơ giọng có sẵn (.pt)", "📤 Tải lên Audio mẫu mới"],
+                        value="🎙️ Sử dụng Hồ sơ giọng có sẵn (.pt)" if list_voice_profiles() else "📤 Tải lên Audio mẫu mới",
+                        label="Nguồn giọng đọc"
                     )
 
-                def _on_sc_source_change(mode_choice):
-                    is_preset = "Hồ sơ giọng có sẵn" in mode_choice
-                    return gr.update(visible=is_preset), gr.update(visible=not is_preset)
+                    with gr.Group(visible=bool(list_voice_profiles())) as sc_preset_group:
+                        with gr.Row():
+                            sc_saved_profile = gr.Dropdown(
+                                label="Chọn hồ sơ giọng",
+                                choices=list_voice_profiles(),
+                                value=list_voice_profiles()[0] if list_voice_profiles() else None,
+                                scale=3
+                            )
+                            sc_preset_preview = gr.Audio(
+                                label="Nghe thử",
+                                value=get_voice_profile_preview(list_voice_profiles()[0]) if list_voice_profiles() else None,
+                                interactive=False,
+                                scale=2,
+                                elem_classes="compact-audio"
+                            )
 
-                sc_source_type.change(
-                    _on_sc_source_change,
-                    inputs=[sc_source_type],
-                    outputs=[sc_preset_group, sc_custom_group]
-                )
-                sc_saved_profile.change(
-                    lambda p: get_voice_profile_preview(p),
-                    inputs=[sc_saved_profile],
-                    outputs=[sc_preset_preview]
-                )
-                
-                gr.Markdown("### 2. Dán Kịch Bản / Timeline")
-                sc_script = gr.Textbox(
-                    label="Kịch bản phân đoạn (Script)",
-                    lines=12,
-                    placeholder="[#1] THỜI GIAN: 0.0 -> 5.0\nVĂN BẢN: Nội dung câu 1...\nCẢM XÚC: Hài hước\nHƯỚNG DẪN AI: High energy intro\n------------------------------------------",
-                    value="""After clawing your way out of your automated smart-home trap, an even bigger disaster strikes your pockets: Apple Pay and credit cards instantly turn into worthless plastic junk!
+                    with gr.Group(visible=not bool(list_voice_profiles())) as sc_custom_group:
+                        sc_ref_audio = gr.Audio(
+                            label="Tải lên file âm thanh giọng mẫu (3–10 giây)",
+                            type="filepath",
+                            elem_classes="compact-audio",
+                        )
+                        sc_ref_text = gr.Textbox(
+                            label="Văn bản giọng mẫu (Tùy chọn)",
+                            placeholder="Để trống nếu muốn tự động nhận diện (ASR)...",
+                        )
+
+                    def _on_sc_source_change(mode_choice):
+                        is_preset = "Hồ sơ giọng có sẵn" in mode_choice
+                        return gr.update(visible=is_preset), gr.update(visible=not is_preset)
+
+                    sc_source_type.change(
+                        _on_sc_source_change,
+                        inputs=[sc_source_type],
+                        outputs=[sc_preset_group, sc_custom_group]
+                    )
+                    sc_saved_profile.change(
+                        lambda p: get_voice_profile_preview(p),
+                        inputs=[sc_saved_profile],
+                        outputs=[sc_preset_preview]
+                    )
+                    
+                    sc_lang = create_lang_dropdown("Ngôn ngữ giọng đọc (Language)")
+
+                with gr.Group(elem_classes="ux-card"):
+                    gr.Markdown("### 📝 Bước 2: Nhập & Phân Tích Kịch Bản")
+                    sc_script = gr.Textbox(
+                        label="Kịch bản phân đoạn (Script)",
+                        lines=10,
+                        placeholder="[#1] THỜI GIAN: 0.0 -> 5.0\nVĂN BẢN: Nội dung câu 1...\nCẢM XÚC: Hài hước\nHƯỚNG DẪN AI: High energy intro\n------------------------------------------",
+                        value="""After clawing your way out of your automated smart-home trap, an even bigger disaster strikes your pockets: Apple Pay and credit cards instantly turn into worthless plastic junk!
 Picture yourself pulling into the Starbucks Drive-thru, ordering an iced oat milk caramel macchiato with extra cold foam for nine whole dollars.
 You casually flick your wrist, tapping your shiny Apple Watch against the contactless payment terminal, waiting for that sleek, reassuring digital "beep."
 Instead, the barista shakes his head apologetically as the screen blares a loud error buzz: "Nationwide network blackout, bro. Cash only today, exact change preferred!"
@@ -88,154 +100,156 @@ Downtown, outside the big Chase and Bank of America branches, massive queues wra
 Over at local grocery supermarkets, pure retail comedy unfolds as cloud-based barcode scanners and digital inventory systems freeze in unison.
 Cashiers dust off vintage Casio desktop calculators, manually typing in the price of every cereal box while squinting at tiny yellow price stickers on shelf edges.
 Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, while managers weigh vegetables on antique mechanical balance scales with swinging needles!"""
-                )
-
-                with gr.Accordion("📂 Nhập kịch bản từ tệp tin (File Import)", open=False):
-                    with gr.Row():
-                        sc_import_raw = gr.File(label="Import Kịch bản Raw (mỗi dòng 1 câu .txt/.md)", file_types=[".txt", ".md"], scale=1)
-                        sc_import_std = gr.File(label="Import Kịch bản Chuẩn Timeline (.txt/.md)", file_types=[".txt", ".md"], scale=1)
-
-                def _read_file_content(file_obj):
-                    if not file_obj:
-                        return gr.update()
-                    try:
-                        path = file_obj.name if hasattr(file_obj, "name") else str(file_obj)
-                        for enc in ["utf-8-sig", "utf-8", "utf-16", "cp1252", "latin-1"]:
-                            try:
-                                with open(path, "r", encoding=enc) as f:
-                                    return f.read()
-                            except (UnicodeDecodeError, UnicodeError):
-                                continue
-                        with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                            return f.read()
-                    except Exception as e:
-                        gr.Warning(f"Lỗi đọc file: {e}")
-                        return gr.update()
-
-                sc_import_raw.change(_read_file_content, inputs=[sc_import_raw], outputs=[sc_script])
-                sc_import_std.change(_read_file_content, inputs=[sc_import_std], outputs=[sc_script])
-
-                gr.Markdown("### 🤖 Tự động nhận diện cảm xúc kịch bản bằng Gemini AI")
-                with gr.Accordion("⚙️ Cấu hình Gemini Flash AI", open=False):
-                    with gr.Row():
-                        gemini_api_key = gr.Textbox(
-                            label="Gemini API Key",
-                            type="password",
-                            placeholder="Dán Google Gemini API Key vào đây (hoặc để trống nếu đã set ENV)...",
-                            value=os.environ.get("GEMINI_API_KEY", ""),
-                            scale=3
-                        )
-                        gemini_model = gr.Dropdown(
-                            label="Phiên bản mô hình",
-                            choices=["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"],
-                            value="gemini-2.5-flash",
-                            scale=1
-                        )
-                
-                gemini_analyze_btn = gr.Button("✨ Phân tích kịch bản & Gợi ý cảm xúc (Gemini AI)", variant="secondary")
-
-                with gr.Group(visible=False) as gemini_preview_group:
-                    gr.Markdown("### 📋 Kết quả gợi ý từ Gemini AI (Xem trước & Chấp nhận)")
-                    gemini_suggested_script = gr.Textbox(
-                        label="Kịch bản sau khi Gemini gắn thẻ cảm xúc & hướng dẫn AI",
-                        lines=8,
-                        interactive=True,
                     )
+
+                    with gr.Accordion("📂 Nhập kịch bản từ file (.txt / .md)", open=False):
+                        with gr.Row():
+                            sc_import_raw = gr.File(label="Import Kịch bản Raw (mỗi dòng 1 câu)", file_types=[".txt", ".md"], scale=1)
+                            sc_import_std = gr.File(label="Import Kịch bản Timeline Chuẩn", file_types=[".txt", ".md"], scale=1)
+
+                    def _read_file_content(file_obj):
+                        if not file_obj:
+                            return gr.update()
+                        try:
+                            path = file_obj.name if hasattr(file_obj, "name") else str(file_obj)
+                            for enc in ["utf-8-sig", "utf-8", "utf-16", "cp1252", "latin-1"]:
+                                try:
+                                    with open(path, "r", encoding=enc) as f:
+                                        return f.read()
+                                except (UnicodeDecodeError, UnicodeError):
+                                    continue
+                            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                                return f.read()
+                        except Exception as e:
+                            gr.Warning(f"Lỗi đọc file: {e}")
+                            return gr.update()
+
+                    sc_import_raw.change(_read_file_content, inputs=[sc_import_raw], outputs=[sc_script])
+                    sc_import_std.change(_read_file_content, inputs=[sc_import_std], outputs=[sc_script])
+
+                    with gr.Accordion("🤖 Tự động phân tích cảm xúc kịch bản bằng Gemini AI", open=False):
+                        with gr.Row():
+                            gemini_api_key = gr.Textbox(
+                                label="Gemini API Key",
+                                type="password",
+                                placeholder="Dán Google Gemini API Key vào đây (hoặc để trống nếu đã set ENV)...",
+                                value=os.environ.get("GEMINI_API_KEY", ""),
+                                scale=3
+                            )
+                            gemini_model = gr.Dropdown(
+                                label="Model Gemini",
+                                choices=["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"],
+                                value="gemini-2.5-flash",
+                                scale=1
+                            )
+                        gemini_analyze_btn = gr.Button("✨ Phân Tích Cảm Xúc Ngữ Cảnh (Gemini Flash AI)", variant="secondary")
+
+                    with gr.Group(visible=False) as gemini_preview_group:
+                        gr.Markdown("#### 📋 Kết quả gợi ý cảm xúc từ Gemini AI:")
+                        gemini_suggested_script = gr.Textbox(
+                            label="Kịch bản sau khi gắn thẻ cảm xúc & chỉ dẫn AI",
+                            lines=8,
+                            interactive=True,
+                        )
+                        with gr.Row():
+                            gemini_apply_btn = gr.Button("✅ Đồng ý & Áp dụng kịch bản", variant="primary", scale=2)
+                            gemini_cancel_btn = gr.Button("❌ Hủy", variant="secondary", scale=1)
+
                     with gr.Row():
-                        gemini_apply_btn = gr.Button("✅ Đồng ý & Áp dụng vào kịch bản chính", variant="primary", scale=2)
-                        gemini_cancel_btn = gr.Button("❌ Hủy bỏ", variant="secondary", scale=1)
+                        sc_export_btn = gr.Button("💾 Xuất File Kịch Bản Chuẩn (.txt)", size="sm", scale=1)
+                        sc_export_file = gr.File(label="Tải về file", interactive=False, scale=2)
 
-                with gr.Row():
-                    sc_export_btn = gr.Button("💾 Xuất file Kịch bản chuẩn (.txt)", size="sm", scale=1)
-                    sc_export_file = gr.File(label="Tải về Kịch bản chuẩn", interactive=False, scale=2)
+                    def _on_export_script(script_text):
+                        if not script_text or not script_text.strip():
+                            gr.Warning("Kịch bản hiện tại đang trống.")
+                            return None
+                        tmp = tempfile.NamedTemporaryFile(delete=False, suffix="_standard_script.txt", mode="w", encoding="utf-8")
+                        tmp.write(script_text)
+                        tmp.close()
+                        return tmp.name
 
-                def _on_export_script(script_text):
-                    if not script_text or not script_text.strip():
-                        gr.Warning("Kịch bản hiện tại đang trống.")
-                        return None
-                    tmp = tempfile.NamedTemporaryFile(delete=False, suffix="_standard_script.txt", mode="w", encoding="utf-8")
-                    tmp.write(script_text)
-                    tmp.close()
-                    return tmp.name
+                    sc_export_btn.click(_on_export_script, inputs=[sc_script], outputs=[sc_export_file])
 
-                sc_export_btn.click(_on_export_script, inputs=[sc_script], outputs=[sc_export_file])
+                    gr.Markdown("💡 **Gợi ý mẫu cảm xúc nhanh:**")
+                    with gr.Row():
+                        preset_btn_fun = gr.Button("😂 Hài hước / Sôi nổi", size="sm", elem_classes="preset-chip")
+                        preset_btn_serious = gr.Button("🧐 Nghiêm túc / Chỉnh chu", size="sm", elem_classes="preset-chip")
+                        preset_btn_whisper = gr.Button("🤫 Thì thầm / Bí ẩn", size="sm", elem_classes="preset-chip")
+                        preset_btn_dramatic = gr.Button("🔥 Kịch tính / Cao trào", size="sm", elem_classes="preset-chip")
+                        preset_btn_calm = gr.Button("☕ Nhẹ nhàng / Bình thản", size="sm", elem_classes="preset-chip")
 
-                gr.Markdown("💡 **Gợi ý cảm xúc nhanh:**")
-                with gr.Row():
-                    preset_btn_fun = gr.Button("😂 Hài hước / Sôi nổi", size="sm", elem_classes="preset-chip")
-                    preset_btn_serious = gr.Button("🧐 Nghiêm túc / Chỉnh chu", size="sm", elem_classes="preset-chip")
-                    preset_btn_whisper = gr.Button("🤫 Thì thầm / Bí ẩn", size="sm", elem_classes="preset-chip")
-                    preset_btn_dramatic = gr.Button("🔥 Kịch tính / Cao trào", size="sm", elem_classes="preset-chip")
-                    preset_btn_calm = gr.Button("☕ Nhẹ nhàng / Bình thản", size="sm", elem_classes="preset-chip")
+                    def _append_preset(script_text, emotion_str, guide_str):
+                        preset_template = f"\nCẢM XÚC: {emotion_str}\nHƯỚNG DẪN AI: {guide_str}\n"
+                        return (script_text or "") + preset_template
 
-                def _append_preset(script_text, emotion_str, guide_str):
-                    preset_template = f"\nCẢM XÚC: {emotion_str}\nHƯỚNG DẪN AI: {guide_str}\n"
-                    return (script_text or "") + preset_template
+                    preset_btn_fun.click(lambda s: _append_preset(s, "Hài hước, vui vẻ", "High energy intro"), inputs=[sc_script], outputs=[sc_script])
+                    preset_btn_serious.click(lambda s: _append_preset(s, "Nghiêm túc, chỉnh chu", "Steady pace, formal"), inputs=[sc_script], outputs=[sc_script])
+                    preset_btn_whisper.click(lambda s: _append_preset(s, "Thì thầm", "Whisper, secret voice"), inputs=[sc_script], outputs=[sc_script])
+                    preset_btn_dramatic.click(lambda s: _append_preset(s, "Kịch tính, cao trào", "High pitch, exciting"), inputs=[sc_script], outputs=[sc_script])
+                    preset_btn_calm.click(lambda s: _append_preset(s, "Bình thường, tự nhiên", "Calm, steady pace"), inputs=[sc_script], outputs=[sc_script])
 
-                preset_btn_fun.click(lambda s: _append_preset(s, "Hài hước, vui vẻ", "High energy intro"), inputs=[sc_script], outputs=[sc_script])
-                preset_btn_serious.click(lambda s: _append_preset(s, "Nghiêm túc, chỉnh chu", "Steady pace, formal"), inputs=[sc_script], outputs=[sc_script])
-                preset_btn_whisper.click(lambda s: _append_preset(s, "Thì thầm", "Whisper, secret voice"), inputs=[sc_script], outputs=[sc_script])
-                preset_btn_dramatic.click(lambda s: _append_preset(s, "Kịch tính, cao trào", "High pitch, exciting"), inputs=[sc_script], outputs=[sc_script])
-                preset_btn_calm.click(lambda s: _append_preset(s, "Bình thường, tự nhiên", "Calm, steady pace"), inputs=[sc_script], outputs=[sc_script])
+                    def _on_gemini_analyze(script_text, api_key, model_nm, progress=gr.Progress()):
+                        if not script_text or not script_text.strip():
+                            gr.Warning("Vui lòng nhập hoặc import kịch bản trước khi phân tích.")
+                            return gr.update(visible=False), "", "Kịch bản trống."
+                        try:
+                            progress(0.2, desc="Đang gửi kịch bản đến Gemini AI...")
+                            res = analyze_script_with_gemini(script_text, api_key, model_nm)
+                            progress(1.0, desc="Phân tích thành công!")
+                            return gr.update(visible=True), res, "✅ Gemini đã phân tích xong! Hãy kiểm tra và bấm 'Đồng ý & Áp dụng'."
+                        except Exception as e:
+                            gr.Warning(f"Lỗi phân tích Gemini: {e}")
+                            return gr.update(visible=False), "", f"Lỗi Gemini: {e}"
 
-                def _on_gemini_analyze(script_text, api_key, model_nm, progress=gr.Progress()):
-                    if not script_text or not script_text.strip():
-                        gr.Warning("Vui lòng nhập hoặc import kịch bản trước khi phân tích.")
-                        return gr.update(visible=False), "", "Kịch bản trống."
-                    try:
-                        progress(0.2, desc="Đang gửi kịch bản đến Gemini AI...")
-                        res = analyze_script_with_gemini(script_text, api_key, model_nm)
-                        progress(1.0, desc="Phân tích thành công!")
-                        return gr.update(visible=True), res, "✅ Gemini đã phân tích xong! Hãy kiểm tra và bấm 'Đồng ý & Áp dụng'."
-                    except Exception as e:
-                        gr.Warning(f"Lỗi phân tích Gemini: {e}")
-                        return gr.update(visible=False), "", f"Lỗi Gemini: {e}"
+                    def _on_gemini_apply(suggested_text):
+                        return suggested_text, gr.update(visible=False), "✅ Đã áp dụng kịch bản có gắn thẻ cảm xúc từ Gemini!"
 
-                def _on_gemini_apply(suggested_text):
-                    return suggested_text, gr.update(visible=False), "✅ Đã áp dụng kịch bản có gắn thẻ cảm xúc từ Gemini!"
+                    def _on_gemini_cancel():
+                        return gr.update(visible=False), "Đã hủy gợi ý của Gemini."
 
-                def _on_gemini_cancel():
-                    return gr.update(visible=False), "Đã hủy gợi ý của Gemini."
-                
-                (
-                    sc_ns,
-                    sc_gs,
-                    sc_dn,
-                    sc_sp,
-                    sc_du,
-                    sc_pp,
-                    sc_po,
-                ) = create_gen_settings()
+                with gr.Group(elem_classes="ux-card"):
+                    gr.Markdown("### ⚙️ Bước 3: Cài Đặt Sinh Giọng & Điều Khiển")
+                    (
+                        sc_ns,
+                        sc_gs,
+                        sc_dn,
+                        sc_sp,
+                        sc_du,
+                        sc_pp,
+                        sc_po,
+                    ) = create_gen_settings()
 
-                with gr.Row():
                     sc_resume = gr.Checkbox(
-                        label="🔄 Tiếp tục tiến trình (Bỏ qua các câu đã tạo thành công)",
+                        label="🔄 Tiếp tục tiến trình (Bỏ qua câu đã tạo thành công)",
                         value=True,
-                        info="Tự động giữ nguyên các file âm thanh đã sinh trước đó, không tốn GPU sinh lại từ đầu.",
+                        info="Tự động giữ nguyên audio đã sinh trước đó, không tốn GPU render lại.",
                     )
-                with gr.Row():
-                    sc_btn = gr.Button("▶ Sinh đợt này (10 phân đoạn)", variant="primary", scale=2)
-                    sc_next_btn = gr.Button("⏭ Đợt tiếp theo", variant="secondary", scale=1)
-                sc_all_btn = gr.Button("⚡ Sinh TOÀN BỘ kịch bản", variant="primary")
-            with gr.Column(scale=1):
-                with gr.Row():
-                    sc_prev_view_btn = gr.Button("◀ Đợt trước", size="sm", scale=1)
-                    sc_page_info = gr.Markdown("### 📑 Đang xem: Phân đoạn 1 - 10", elem_classes="text-center")
-                    sc_next_view_btn = gr.Button("Đợt sau ▶", size="sm", scale=1)
+                    with gr.Row():
+                        sc_btn = gr.Button("▶ Sinh đợt này (10 câu)", variant="primary", scale=2)
+                        sc_next_btn = gr.Button("⏭ Đợt tiếp theo", variant="secondary", scale=1)
+                    sc_all_btn = gr.Button("⚡ Sinh TOÀN BỘ kịch bản", variant="primary", size="lg")
 
-                sc_audios = []
-                sc_retries = []
-                with gr.Group():
-                    for i in range(1, 11):
-                        with gr.Row(elem_classes="segment-card"):
-                            aud = gr.Audio(label=f"Phân đoạn #{i}", type="numpy", scale=4)
-                            btn = gr.Button("🔄 Thử lại", size="sm", scale=1)
-                            sc_audios.append(aud)
-                            sc_retries.append(btn)
-                
-                sc_zip = gr.File(label="💾 Tải về toàn bộ file âm thanh (.ZIP)")
-                sc_parsed_markdown = gr.Markdown(label="Tóm tắt phân đoạn kịch bản")
-                sc_status = gr.Textbox(label="Trạng thái & Tiến trình trực tiếp", lines=5)
+            # Right Column: Segment Audio Players & Batch ZIP Download
+            with gr.Column(scale=1):
+                with gr.Group(elem_classes="ux-card"):
+                    with gr.Row():
+                        sc_prev_view_btn = gr.Button("◀ Đợt trước", size="sm", scale=1)
+                        sc_page_info = gr.Markdown("### 📑 Đang xem: Phân đoạn 1 - 10", elem_classes="text-center")
+                        sc_next_view_btn = gr.Button("Đợt sau ▶", size="sm", scale=1)
+
+                    sc_audios = []
+                    sc_retries = []
+                    with gr.Group():
+                        for i in range(1, 11):
+                            with gr.Row(elem_classes="segment-card"):
+                                aud = gr.Audio(label=f"Phân đoạn #{i}", type="numpy", scale=4)
+                                btn = gr.Button("🔄 Thử lại", size="sm", scale=1)
+                                sc_audios.append(aud)
+                                sc_retries.append(btn)
+                    
+                    sc_zip = gr.File(label="💾 Tải về toàn bộ file âm thanh (.ZIP)")
+                    sc_parsed_markdown = gr.Markdown(label="Tóm tắt phân đoạn kịch bản")
+                    sc_status = gr.Textbox(label="Trạng thái & Tiến trình trực tiếp", lines=5)
 
         def _generate_segments_core(
             lang, source_type, saved_prof, ref_audio, ref_text, script_text,
