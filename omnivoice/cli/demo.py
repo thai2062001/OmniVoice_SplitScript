@@ -41,15 +41,49 @@ import torch
 import json
 import urllib.request
 import urllib.error
+import gc
 
 from omnivoice import OmniVoice, OmniVoiceGenerationConfig
 from omnivoice.utils.common import get_best_device
 from omnivoice.utils.lang_map import LANG_NAMES, lang_display_name
 
 
+def _clean_gpu_memory():
+    """Safely frees cached CUDA VRAM and forces garbage collection."""
+    gc.collect()
+    if torch.cuda.is_available():
+        try:
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+        except Exception:
+            pass
+
+
 # ---------------------------------------------------------------------------
-# Gemini AI Script Emotion & Style Analysis
+# Storage Directory Detection (Auto-detect Google Drive vs Local)
 # ---------------------------------------------------------------------------
+def _get_storage_dirs():
+    """
+    Detects if running on Google Colab with Google Drive mounted.
+    Returns (saved_voices_dir, outputs_dir, is_gdrive).
+    """
+    gdrive_base = "/content/drive/MyDrive/OmniVoice_Studio"
+    if os.path.exists("/content/drive/MyDrive"):
+        voices_dir = os.path.join(gdrive_base, "saved_voices")
+        out_dir = os.path.join(gdrive_base, "outputs")
+        is_gdrive = True
+    else:
+        # Fallback to local workspace
+        local_base = os.path.dirname(os.path.abspath(__file__))
+        voices_dir = os.path.join(local_base, "saved_voices")
+        out_dir = os.path.join(local_base, "outputs")
+        is_gdrive = False
+
+    os.makedirs(voices_dir, exist_ok=True)
+    os.makedirs(out_dir, exist_ok=True)
+    return voices_dir, out_dir, is_gdrive
+
+_SAVED_VOICES_DIR, _OUTPUTS_DIR, _IS_GDRIVE = _get_storage_dirs()
 def analyze_script_with_gemini(script_text: str, api_key: str = "", model_name: str = "gemini-2.5-flash"):
     """
     Analyzes each segment of the script to recommend emotion & voice instruction tags.
@@ -123,8 +157,6 @@ Quy tắc quan trọng:
 # ---------------------------------------------------------------------------
 # Saved Voice Profiles Management (.pt embedding storage)
 # ---------------------------------------------------------------------------
-_SAVED_VOICES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saved_voices")
-os.makedirs(_SAVED_VOICES_DIR, exist_ok=True)
 
 
 def list_voice_profiles():
@@ -916,6 +948,12 @@ def build_demo(
     def _gen_settings():
         with gr.Accordion("⚙️ Cài đặt tạo giọng nâng cao (Generation Settings)", open=False):
             with gr.Row():
+                turbo_draft = gr.Checkbox(
+                    label="⚡ Chế độ nháp siêu tốc (Turbo Draft - 16 bước)",
+                    value=False,
+                    info="Bật để nghe thử nhanh nhịp điệu/cảm xúc kịch bản với tốc độ nhanh nhất (16 steps).",
+                )
+            with gr.Row():
                 sp = gr.Slider(
                     0.5,
                     1.5,
@@ -935,10 +973,10 @@ def build_demo(
                 ns = gr.Slider(
                     4,
                     64,
-                    value=32,
+                    value=24,
                     step=1,
                     label="Số bước khử nhiễu (Inference Steps)",
-                    info="Mặc định: 32. Càng cao âm thanh càng chi tiết.",
+                    info="Mặc định: 24 (Tối ưu tốc độ & chất lượng trên GPU Colab/T4).",
                     scale=1
                 )
                 gs = gr.Slider(
@@ -966,15 +1004,24 @@ def build_demo(
                     value=True,
                     info="Xóa bỏ khoảng lặng thừa ở cuối file audio sinh ra.",
                 )
+
+            turbo_draft.change(
+                lambda is_turbo: 16 if is_turbo else 24,
+                inputs=[turbo_draft],
+                outputs=[ns]
+            )
+
         return ns, gs, dn, sp, du, pp, po
+
+    storage_badge = "☁️ <b>Lưu trữ: Google Drive</b> <i>(/content/drive/MyDrive/OmniVoice_Studio)</i>" if _IS_GDRIVE else "💻 <b>Lưu trữ: Cục bộ (Local)</b>"
 
     with gr.Blocks(theme=theme, css=css, title="OmniVoice Studio") as demo:
         with gr.Row(elem_classes="app-header"):
             with gr.Column():
                 gr.Markdown(
-                    """
+                    f"""
 <h1 class="app-title">⚡ OmniVoice AI Studio</h1>
-<p class="app-subtitle">Nền tảng lồng tiếng & Clone Voice kịch bản chuyên nghiệp cho hơn 600+ ngôn ngữ</p>
+<p class="app-subtitle">Nền tảng lồng tiếng & Clone Voice kịch bản chuyên nghiệp cho hơn 600+ ngôn ngữ &nbsp;|&nbsp; {storage_badge}</p>
 """
                 )
 
@@ -1687,6 +1734,12 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                         ) = _gen_settings()
 
                         with gr.Row():
+                            sc_resume = gr.Checkbox(
+                                label="🔄 Tiếp tục tiến trình (Bỏ qua các câu đã tạo thành công)",
+                                value=True,
+                                info="Tự động giữ nguyên các file âm thanh đã sinh trước đó, không tốn GPU sinh lại từ đầu.",
+                            )
+                        with gr.Row():
                             sc_btn = gr.Button("▶ Sinh đợt này (10 phân đoạn)", variant="primary", scale=2)
                             sc_next_btn = gr.Button("⏭ Đợt tiếp theo", variant="secondary", scale=1)
                         sc_all_btn = gr.Button("⚡ Sinh TOÀN BỘ kịch bản", variant="primary")
@@ -1723,7 +1776,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
 
                 def _generate_segments_core(
                     lang, source_type, saved_prof, ref_audio, ref_text, script_text,
-                    ns, gs, dn, sp, du, pp, po,
+                    ns, gs, dn, sp, du, pp, po, resume_existing,
                     target_indices, current_page, all_cache, temp_dir,
                     progress=gr.Progress()
                 ):
@@ -1745,7 +1798,11 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                         all_cache = {}
                     
                     if not temp_dir or not os.path.exists(temp_dir):
-                        temp_dir = tempfile.mkdtemp()
+                        if _IS_GDRIVE:
+                            temp_dir = os.path.join(_OUTPUTS_DIR, "script_cache")
+                            os.makedirs(temp_dir, exist_ok=True)
+                        else:
+                            temp_dir = tempfile.mkdtemp(prefix="omnivoice_script_")
 
                     prompt = None
                     actual_ref_audio = ref_audio
@@ -1780,7 +1837,21 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                         text = seg["text"]
                         duration_val = seg["duration"]
                         instruct_val = seg["valid_instruct"]
-                        
+                        wav_path = os.path.join(temp_dir, f"segment_{seg_id}.wav")
+
+                        # Resume check: if audio already exists and is valid, load from disk
+                        if resume_existing and os.path.exists(wav_path) and os.path.getsize(wav_path) > 1000:
+                            if idx not in all_cache or all_cache[idx][0] is None:
+                                try:
+                                    import soundfile as sf
+                                    cached_data, cached_sr = sf.read(wav_path, dtype="int16")
+                                    all_cache[idx] = ((cached_sr, cached_data), "Đã có sẵn (Khôi phục)")
+                                    statuses.append(f"Segment #{seg_id} [Đã khôi phục]: Bỏ qua để tiết kiệm GPU.")
+                                except Exception:
+                                    pass
+                            if idx in all_cache and all_cache[idx][0] is not None:
+                                continue
+
                         # Show current progress and exact text being generated
                         progress(
                             (step_i) / max(1, total_targets),
@@ -1809,13 +1880,16 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
 
                             if res and res[1] is not None:
                                 import soundfile as sf
-                                wav_path = os.path.join(temp_dir, f"segment_{seg_id}.wav")
                                 sf.write(wav_path, res[1], res[0])
                         except Exception as e:
                             import traceback
                             traceback.print_exc()
                             all_cache[idx] = (None, f"Error: {e}")
                             statuses.append(f"Segment #{seg_id} [LỖI]: {e} (Các đoạn khác vẫn được bảo toàn)")
+
+                        # Periodic GPU memory cleanup
+                        if (step_i + 1) % 5 == 0:
+                            _clean_gpu_memory()
 
                         # Update zip file with all generated wavs in temp_dir incrementally
                         zip_path = None
@@ -1829,6 +1903,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                         # Live yield update after EACH segment
                         yield _render_script_page(current_page, segments, all_cache, temp_dir, zip_path, "\n".join(statuses))
 
+                    _clean_gpu_memory()
                     progress(1.0, desc="Hoàn tất sinh giọng!")
                     yield _render_script_page(current_page, segments, all_cache, temp_dir, zip_path, "\n".join(statuses))
 
@@ -1874,17 +1949,17 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                         page_idx, all_cache, temp_dir
                     )
 
-                def _on_generate_current(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir, progress=gr.Progress()):
+                def _on_generate_current(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, resume_existing, page_idx, all_cache, temp_dir, progress=gr.Progress()):
                     segments = parse_script(script_text) if script_text else []
                     if not segments:
                         yield _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
                         return
                     start_idx = page_idx * PAGE_SIZE
                     target_indices = list(range(start_idx, min(start_idx + PAGE_SIZE, len(segments))))
-                    for res in _generate_segments_core(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, target_indices, page_idx, all_cache, temp_dir, progress):
+                    for res in _generate_segments_core(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, resume_existing, target_indices, page_idx, all_cache, temp_dir, progress):
                         yield res
 
-                def _on_continue_next(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir, progress=gr.Progress()):
+                def _on_continue_next(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, resume_existing, page_idx, all_cache, temp_dir, progress=gr.Progress()):
                     segments = parse_script(script_text) if script_text else []
                     if not segments:
                         yield _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
@@ -1894,25 +1969,26 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                     next_page = min(page_idx + 1, P - 1)
                     start_idx = next_page * PAGE_SIZE
                     target_indices = list(range(start_idx, min(start_idx + PAGE_SIZE, N)))
-                    for res in _generate_segments_core(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, target_indices, next_page, all_cache, temp_dir, progress):
+                    for res in _generate_segments_core(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, resume_existing, target_indices, next_page, all_cache, temp_dir, progress):
                         yield res
 
-                def _on_generate_all(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir, progress=gr.Progress()):
+                def _on_generate_all(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, resume_existing, page_idx, all_cache, temp_dir, progress=gr.Progress()):
                     segments = parse_script(script_text) if script_text else []
                     if not segments:
                         yield _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
                         return
                     target_indices = list(range(len(segments)))
-                    for res in _generate_segments_core(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, target_indices, page_idx, all_cache, temp_dir, progress):
+                    for res in _generate_segments_core(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, resume_existing, target_indices, page_idx, all_cache, temp_dir, progress):
                         yield res
 
-                def _on_retry_single(slot_idx, lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir, progress=gr.Progress()):
+                def _on_retry_single(slot_idx, lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, resume_existing, page_idx, all_cache, temp_dir, progress=gr.Progress()):
                     segments = parse_script(script_text) if script_text else []
                     actual_idx = page_idx * PAGE_SIZE + slot_idx
                     if not segments or actual_idx >= len(segments):
                         yield _render_script_page(page_idx, segments, all_cache or {}, temp_dir or "", None, f"Phân đoạn {actual_idx + 1} không tồn tại.")
                         return
-                    for res in _generate_segments_core(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, [actual_idx], page_idx, all_cache, temp_dir, progress):
+                    # Force resume_existing=False when explicitly retrying a specific segment
+                    for res in _generate_segments_core(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, False, [actual_idx], page_idx, all_cache, temp_dir, progress):
                         yield res
 
                 def _on_prev_view(script_text, page_idx, all_cache, temp_dir):
@@ -1929,7 +2005,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
 
                 gen_inputs = [
                     sc_lang, sc_source_type, sc_saved_profile, sc_ref_audio, sc_ref_text, sc_script,
-                    sc_ns, sc_gs, sc_dn, sc_sp, sc_du, sc_pp, sc_po,
+                    sc_ns, sc_gs, sc_dn, sc_sp, sc_du, sc_pp, sc_po, sc_resume,
                     sc_page_state, sc_cache_state, sc_temp_dir_state
                 ]
                 gen_outputs = [
@@ -2354,6 +2430,15 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     device = args.device or get_best_device()
+
+    if torch.cuda.is_available() and "cuda" in str(device).lower():
+        try:
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.benchmark = True
+            torch.backends.cudnn.allow_tf32 = True
+            logging.info("CUDA optimizations enabled: TF32=True, cuDNN benchmark=True")
+        except Exception:
+            pass
 
     checkpoint = args.model
     if not checkpoint:
