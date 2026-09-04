@@ -138,38 +138,87 @@ def list_voice_profiles():
     return sorted(profiles)
 
 
+def get_voice_profile_metadata(name: str):
+    """Loads metadata dictionary for a given voice profile."""
+    if not name:
+        return {}
+    filepath = os.path.join(_SAVED_VOICES_DIR, f"{name}.pt")
+    if not os.path.exists(filepath):
+        return {}
+    try:
+        data = torch.load(filepath, map_location="cpu", weights_only=False)
+        if isinstance(data, dict):
+            meta = data.get("metadata", {})
+            if "ref_text" in data and not meta.get("ref_text"):
+                meta["ref_text"] = data.get("ref_text", "")
+            return meta
+    except Exception as e:
+        logging.warning(f"Failed to read metadata for {name}: {e}")
+    return {}
+
+
+def _slugify_voice_name(name: str) -> str:
+    """Safely converts voice profile name to clean filesystem-safe ASCII filename."""
+    import unicodedata
+    raw = (name or "").strip()
+    nfkd = unicodedata.normalize('NFKD', raw)
+    ascii_text = nfkd.encode('ASCII', 'ignore').decode('ASCII')
+    safe = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', ascii_text)
+    safe = re.sub(r'_+', '_', safe).strip('_.')
+    if not safe:
+        safe = f"voice_profile_{int(time.time())}"
+    return safe
+
+
 def save_voice_profile(name: str, prompt_obj, metadata: dict = None, preview_audio_path: str = None):
     """Saves encoded voice prompt and metadata into .pt file."""
-    # Chuẩn hóa tên hồ sơ: giữ lại chữ cái, số, gạch dưới, gạch ngang; thay thế ký tự lạ bằng '_'
-    raw = name.strip()
-    safe_name = re.sub(r'[^\w\-\.]', '_', raw, flags=re.UNICODE)
-    safe_name = re.sub(r'_+', '_', safe_name).strip('_.')
-    if not safe_name:
-        safe_name = f"voice_profile_{int(time.time())}"
+    raw = (name or "").strip()
+    safe_name = _slugify_voice_name(raw)
+        
     os.makedirs(_SAVED_VOICES_DIR, exist_ok=True)
     filepath = os.path.join(_SAVED_VOICES_DIR, f"{safe_name}.pt")
     
     saved_preview = None
     if preview_audio_path and os.path.exists(preview_audio_path):
-        import shutil
-        preview_ext = os.path.splitext(preview_audio_path)[1] or ".wav"
-        saved_preview = os.path.join(_SAVED_VOICES_DIR, f"{safe_name}{preview_ext}")
-        shutil.copy2(preview_audio_path, saved_preview)
+        try:
+            preview_ext = os.path.splitext(preview_audio_path)[1] or ".wav"
+            saved_preview = os.path.join(_SAVED_VOICES_DIR, f"{safe_name}{preview_ext}")
+            if os.path.abspath(preview_audio_path) != os.path.abspath(saved_preview):
+                shutil.copy2(preview_audio_path, saved_preview)
+        except Exception as e:
+            logging.warning(f"Could not copy preview audio: {e}")
 
-    if hasattr(prompt_obj, "save"):
-        # Native VoiceClonePrompt dataclass
+    meta = metadata or {}
+    meta["display_name"] = raw
+    meta["saved_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+
+    if hasattr(prompt_obj, "ref_audio_tokens"):
+        tokens = prompt_obj.ref_audio_tokens
+        if isinstance(tokens, torch.Tensor):
+            tokens = tokens.detach().cpu()
+        ref_text_val = getattr(prompt_obj, "ref_text", "") or meta.get("ref_text", "")
+        ref_rms_val = float(getattr(prompt_obj, "ref_rms", 0.0))
         data = {
             "format_version": 1,
-            "ref_audio_tokens": prompt_obj.ref_audio_tokens.detach().cpu(),
-            "ref_text": prompt_obj.ref_text,
-            "ref_rms": float(prompt_obj.ref_rms),
-            "metadata": metadata or {},
+            "ref_audio_tokens": tokens,
+            "ref_text": ref_text_val,
+            "ref_rms": ref_rms_val,
+            "metadata": meta,
+            "preview_audio": saved_preview,
+        }
+    elif isinstance(prompt_obj, dict):
+        data = {
+            "format_version": 1,
+            "ref_audio_tokens": prompt_obj.get("ref_audio_tokens"),
+            "ref_text": prompt_obj.get("ref_text", "") or meta.get("ref_text", ""),
+            "ref_rms": float(prompt_obj.get("ref_rms", 0.0)),
+            "metadata": meta,
             "preview_audio": saved_preview,
         }
     else:
         data = {
             "prompt": prompt_obj,
-            "metadata": metadata or {},
+            "metadata": meta,
             "preview_audio": saved_preview,
         }
         
@@ -184,18 +233,22 @@ def load_voice_profile(name: str):
     filepath = os.path.join(_SAVED_VOICES_DIR, f"{name}.pt")
     if not os.path.exists(filepath):
         return None, {}
-    data = torch.load(filepath, map_location="cpu", weights_only=False)
-    if isinstance(data, dict):
-        if "ref_audio_tokens" in data:
-            from omnivoice.models.omnivoice import VoiceClonePrompt
-            prompt = VoiceClonePrompt(
-                ref_audio_tokens=data["ref_audio_tokens"],
-                ref_text=data.get("ref_text", ""),
-                ref_rms=data.get("ref_rms", 0.0),
-            )
-            return prompt, data.get("metadata", {})
-        return data.get("prompt"), data.get("metadata", {})
-    return data, {}
+    try:
+        data = torch.load(filepath, map_location="cpu", weights_only=False)
+        if isinstance(data, dict):
+            if "ref_audio_tokens" in data and data["ref_audio_tokens"] is not None:
+                from omnivoice.models.omnivoice import VoiceClonePrompt
+                prompt = VoiceClonePrompt(
+                    ref_audio_tokens=data["ref_audio_tokens"],
+                    ref_text=data.get("ref_text", "") or "",
+                    ref_rms=float(data.get("ref_rms", 0.0)),
+                )
+                return prompt, data.get("metadata", {})
+            return data.get("prompt"), data.get("metadata", {})
+        return data, {}
+    except Exception as e:
+        logging.error(f"Error loading voice profile {name}: {e}")
+        return None, {}
 
 
 def get_voice_profile_preview(name: str):
@@ -209,7 +262,6 @@ def get_voice_profile_preview(name: str):
         data = torch.load(filepath, map_location="cpu", weights_only=False)
         if isinstance(data, dict) and "preview_audio" in data and data["preview_audio"]:
             p = data["preview_audio"]
-            # Hỗ trợ cả absolute path và relative path tới _SAVED_VOICES_DIR
             if os.path.exists(p):
                 return p
             fallback_local = os.path.join(_SAVED_VOICES_DIR, os.path.basename(p))
@@ -255,6 +307,50 @@ def delete_voice_profile(name: str):
             except Exception:
                 pass
     return True
+
+
+def extract_voice_prompt_safely(model: OmniVoice, audio_path: str, ref_txt: str = None, progress_cb=None):
+    """
+    Creates a VoiceClonePrompt safely. If ref_txt is empty and ASR is unavailable/fails,
+    falls back gracefully with a neutral reference text to avoid crash.
+    """
+    if progress_cb:
+        progress_cb(0.3, desc="Đang phân tích âm thanh mẫu...")
+        
+    actual_ref_text = (ref_txt or "").strip()
+    
+    # Check if we need ASR and whether ASR is ready
+    if not actual_ref_text:
+        try:
+            if hasattr(model, "_asr_pipe") and model._asr_pipe is not None:
+                if progress_cb:
+                    progress_cb(0.5, desc="Đang nhận diện giọng nói qua Whisper ASR...")
+                actual_ref_text = model.transcribe(audio_path)
+            elif hasattr(model, "load_asr_model"):
+                try:
+                    if progress_cb:
+                        progress_cb(0.4, desc="Đang kích hoạt Whisper ASR...")
+                    model.load_asr_model()
+                    actual_ref_text = model.transcribe(audio_path)
+                except Exception as asr_err:
+                    logging.warning(f"ASR load failed ({asr_err}), falling back to default heuristic text.")
+                    actual_ref_text = "Giọng đọc mẫu tham chiếu chuẩn."
+        except Exception as e:
+            logging.warning(f"Transcription failed ({e}), using fallback reference text.")
+            actual_ref_text = "Giọng đọc mẫu tham chiếu chuẩn."
+
+    if not actual_ref_text:
+        actual_ref_text = "Giọng đọc mẫu tham chiếu chuẩn."
+
+    if progress_cb:
+        progress_cb(0.7, desc="Đang trích xuất vector đặc trưng (Neural Audio Codec)...")
+        
+    prompt_obj = model.create_voice_clone_prompt(
+        ref_audio=audio_path,
+        ref_text=actual_ref_text,
+    )
+    return prompt_obj, actual_ref_text
+
 
 
 
@@ -863,7 +959,7 @@ def build_demo(
                     """
 ### 🎙️ Quản lý & Lưu Trữ Hồ Sơ Giọng Mẫu Cố Định (.pt Embedding)
 *Tại đây bạn có thể trích xuất vector giọng nói từ một đoạn âm thanh mẫu (3-10 giây) và lưu lại vĩnh viễn.*
-*Các tab **Script Clone** và **Voice Clone** chỉ cần chọn tên giọng để sử dụng ngay mà **không cần upload hay mã hóa lại audio**.*
+*Các tab **Script Clone**, **Voice Clone** và **Batch Voice Clone** chỉ cần chọn tên giọng để sử dụng ngay mà **không cần upload hay mã hóa lại audio**.*
 """
                 )
                 with gr.Row():
@@ -879,90 +975,165 @@ def build_demo(
                         )
                         vm_text = gr.Textbox(
                             label="Văn bản giọng mẫu (Tùy chọn)",
-                            placeholder="Để trống nếu muốn tự động nhận diện (ASR)...",
+                            placeholder="Để trống nếu muốn tự động nhận diện (ASR) hoặc dùng tham chiếu mặc định...",
                         )
                         vm_save_btn = gr.Button("⚡ Trích xuất & Lưu Hồ Sơ Giọng (.pt)", variant="primary")
 
                     with gr.Column(scale=1):
                         gr.Markdown("### 📂 Danh sách Hồ sơ giọng đã lưu")
+                        init_profiles = list_voice_profiles()
+                        init_selected = init_profiles[0] if init_profiles else None
+                        init_preview = get_voice_profile_preview(init_selected) if init_selected else None
+                        
+                        def _format_voice_info(name):
+                            if not name:
+                                return "*(Chưa có hồ sơ giọng nào được chọn)*"
+                            meta = get_voice_profile_metadata(name)
+                            disp = meta.get("display_name", name)
+                            saved = meta.get("saved_at", "Không rõ")
+                            ref_t = meta.get("ref_text", "*(Không có văn bản tham chiếu)*")
+                            prev_p = get_voice_profile_preview(name)
+                            prev_st = "🔊 Có file nghe thử" if prev_p else "🔇 Không có file nghe thử"
+                            return f"""**Chi tiết hồ sơ giọng:**
+- **Tên hiển thị:** `{disp}` (Tệp lưu: `{name}.pt`)
+- **Thời gian tạo:** {saved} | **File nghe thử:** {prev_st}
+- **Văn bản tham chiếu:** *"{ref_t}"*
+"""
+
                         vm_profiles_list = gr.Dropdown(
                             label="Chọn hồ sơ giọng",
-                            choices=list_voice_profiles(),
-                            value=list_voice_profiles()[0] if list_voice_profiles() else None,
+                            choices=init_profiles,
+                            value=init_selected,
                             interactive=True,
                         )
                         with gr.Row():
                             vm_refresh_btn = gr.Button("🔄 Làm mới danh sách", size="sm")
                             vm_delete_btn = gr.Button("🗑️ Xóa hồ sơ này", size="sm", variant="stop")
-                        vm_preview_audio = gr.Audio(label="Nghe thử giọng mẫu đã lưu", interactive=False)
-                        vm_status = gr.Textbox(label="Trạng thái", lines=4)
+                        
+                        vm_preview_audio = gr.Audio(
+                            label="Nghe thử giọng mẫu gốc đã lưu",
+                            value=init_preview,
+                            interactive=False,
+                            elem_classes="compact-audio"
+                        )
+                        vm_info_md = gr.Markdown(value=_format_voice_info(init_selected))
+                        
+                        with gr.Accordion("🔊 Thử nghiệm đọc văn bản nhanh với giọng này", open=False):
+                            with gr.Row():
+                                vm_test_text = gr.Textbox(
+                                    label="Văn bản test giọng",
+                                    value="Xin chào, đây là giọng đọc thử nghiệm được tạo từ hồ sơ đã lưu.",
+                                    lines=2,
+                                    scale=3
+                                )
+                                vm_test_lang = _lang_dropdown("Ngôn ngữ", "Auto")
+                            vm_test_btn = gr.Button("▶ Sinh giọng đọc thử", variant="secondary")
+                            vm_test_audio = gr.Audio(label="Kết quả đọc thử", type="numpy")
+
+                        vm_status = gr.Textbox(label="Trạng thái", lines=3)
+
+                def _sync_all_tabs(target_profile=None, msg=""):
+                    profiles = list_voice_profiles()
+                    has_profiles = len(profiles) > 0
+                    selected = target_profile if (target_profile and target_profile in profiles) else (profiles[0] if has_profiles else None)
+                    
+                    preview_aud = get_voice_profile_preview(selected) if selected else None
+                    info_text = _format_voice_info(selected)
+                    
+                    src_val = "🎙️ Sử dụng Hồ sơ giọng có sẵn (.pt)" if has_profiles else "📤 Tải lên Audio mẫu mới"
+                    
+                    preset_grp_vis = gr.update(visible=has_profiles)
+                    custom_grp_vis = gr.update(visible=not has_profiles)
+                    src_radio_upd = gr.update(value=src_val)
+                    dropdown_upd = gr.update(choices=profiles, value=selected)
+                    preview_upd = gr.update(value=preview_aud)
+                    
+                    return (
+                        # Voice Manager (4):
+                        dropdown_upd, preview_upd, info_text, msg,
+                        # Voice Clone (5):
+                        src_radio_upd, preset_grp_vis, custom_grp_vis, dropdown_upd, preview_upd,
+                        # Batch Voice Clone (5):
+                        src_radio_upd, preset_grp_vis, custom_grp_vis, dropdown_upd, preview_upd,
+                        # Script Clone (5):
+                        src_radio_upd, preset_grp_vis, custom_grp_vis, dropdown_upd, preview_upd
+                    )
 
                 def _on_vm_save(name, audio_path, ref_txt, progress=gr.Progress()):
                     if not name or not str(name).strip():
-                        return gr.update(), gr.update(), gr.update(), None, "❌ Lỗi: Vui lòng đặt tên cho hồ sơ giọng."
+                        return _sync_all_tabs(None, "❌ Lỗi: Vui lòng đặt tên cho hồ sơ giọng.")
                     if not audio_path:
-                        return gr.update(), gr.update(), gr.update(), None, "❌ Lỗi: Vui lòng tải lên file âm thanh mẫu."
+                        return _sync_all_tabs(None, "❌ Lỗi: Vui lòng tải lên file âm thanh mẫu.")
                     
-                    progress(0.2, desc=f"Đang trích xuất vector đặc trưng giọng '{name}'...")
                     try:
-                        prompt_obj = model.create_voice_clone_prompt(
-                            ref_audio=audio_path,
-                            ref_text=ref_txt if (ref_txt and str(ref_txt).strip()) else None,
+                        prompt_obj, actual_ref_text = extract_voice_prompt_safely(
+                            model=model,
+                            audio_path=audio_path,
+                            ref_txt=ref_txt,
+                            progress_cb=progress
                         )
                         saved_name = save_voice_profile(
                             name=str(name).strip(),
                             prompt_obj=prompt_obj,
-                            metadata={"ref_text": ref_txt or "", "created_at": str(os.path.getmtime(audio_path)) if os.path.exists(audio_path) else ""},
+                            metadata={
+                                "ref_text": actual_ref_text,
+                                "created_at": str(os.path.getmtime(audio_path)) if (isinstance(audio_path, str) and os.path.exists(audio_path)) else "",
+                            },
                             preview_audio_path=audio_path,
                         )
                         progress(1.0, desc="Đã lưu hồ sơ giọng thành công!")
-                        new_list = list_voice_profiles()
-                        preview_aud = get_voice_profile_preview(saved_name)
-                        return (
-                            gr.update(choices=new_list, value=saved_name),
-                            gr.update(choices=new_list, value=saved_name),
-                            gr.update(choices=new_list, value=saved_name),
-                            preview_aud,
-                            f"✅ Đã lưu thành công hồ sơ giọng: '{saved_name}.pt'!"
-                        )
+                        return _sync_all_tabs(saved_name, f"✅ Đã lưu thành công hồ sơ giọng: '{saved_name}.pt'!")
                     except Exception as e:
                         import traceback
                         traceback.print_exc()
-                        return gr.update(), gr.update(), gr.update(), None, f"❌ Lỗi khi trích xuất vector giọng: {e}"
+                        return _sync_all_tabs(None, f"❌ Lỗi khi trích xuất vector giọng: {e}")
 
                 def _on_vm_select(profile_nm):
                     if not profile_nm:
-                        return None, ""
+                        return None, "*(Chưa có hồ sơ giọng nào được chọn)*", ""
                     preview_aud = get_voice_profile_preview(profile_nm)
-                    return preview_aud, f"Đã chọn hồ sơ giọng: {profile_nm}"
+                    info_text = _format_voice_info(profile_nm)
+                    return preview_aud, info_text, f"Đã chọn hồ sơ giọng: {profile_nm}"
 
                 def _on_vm_refresh():
-                    new_list = list_voice_profiles()
-                    val = new_list[0] if new_list else None
-                    preview_aud = get_voice_profile_preview(val) if val else None
-                    return (
-                        gr.update(choices=new_list, value=val),
-                        gr.update(choices=new_list, value=val),
-                        gr.update(choices=new_list, value=val),
-                        preview_aud,
-                        "Đã làm mới danh sách hồ sơ giọng."
-                    )
+                    return _sync_all_tabs(None, "Đã làm mới danh sách hồ sơ giọng trên toàn bộ hệ thống.")
 
                 def _on_vm_delete(profile_nm):
                     if not profile_nm:
-                        return gr.update(), gr.update(), gr.update(), None, "Chưa chọn hồ sơ cần xóa."
+                        return _sync_all_tabs(None, "Chưa chọn hồ sơ cần xóa.")
                     delete_voice_profile(profile_nm)
-                    new_list = list_voice_profiles()
-                    val = new_list[0] if new_list else None
-                    preview_aud = get_voice_profile_preview(val) if val else None
-                    return (
-                        gr.update(choices=new_list, value=val),
-                        gr.update(choices=new_list, value=val),
-                        gr.update(choices=new_list, value=val),
-                        preview_aud,
-                        f"Đã xóa hồ sơ: {profile_nm}"
+                    return _sync_all_tabs(None, f"Đã xóa hồ sơ: {profile_nm}")
+
+                def _on_vm_quick_test(profile_nm, test_text, lang):
+                    if not profile_nm:
+                        return None, "Vui lòng chọn hồ sơ giọng trước khi đọc thử."
+                    if not test_text or not test_text.strip():
+                        return None, "Vui lòng nhập văn bản đọc thử."
+                    loaded_prompt, _ = load_voice_profile(profile_nm)
+                    if loaded_prompt is None:
+                        return None, f"Lỗi: Không tìm thấy file hồ sơ {profile_nm}.pt"
+                    return _gen(
+                        test_text.strip(),
+                        lang,
+                        None,
+                        None,
+                        32,
+                        2.0,
+                        True,
+                        1.0,
+                        None,
+                        True,
+                        True,
+                        mode="clone",
+                        ref_text=None,
+                        voice_clone_prompt=loaded_prompt
                     )
 
+                vm_test_btn.click(
+                    _on_vm_quick_test,
+                    inputs=[vm_profiles_list, vm_test_text, vm_test_lang],
+                    outputs=[vm_test_audio, vm_status]
+                )
 
 
             # ==============================================================
@@ -1107,15 +1278,55 @@ def build_demo(
                 with gr.Row():
                     with gr.Column(scale=1):
                         bvc_lang = _lang_dropdown("Language (optional) / 语种 (可选)")
-                        bvc_ref_audio = gr.Audio(
-                            label="Shared Reference Audio / 共享参考音频",
-                            type="filepath",
-                            elem_classes="compact-audio",
+                        
+                        bvc_source_type = gr.Radio(
+                            choices=["🎙️ Sử dụng Hồ sơ giọng có sẵn (.pt)", "📤 Tải lên Audio mẫu mới"],
+                            value="🎙️ Sử dụng Hồ sơ giọng có sẵn (.pt)" if list_voice_profiles() else "📤 Tải lên Audio mẫu mới",
+                            label="Nguồn Giọng Mẫu (Voice Source)"
                         )
-                        bvc_ref_text = gr.Textbox(
-                            label="Shared Reference Text (optional) / 共享参考音频文本（可选）",
-                            placeholder="Leave empty to auto-transcribe.",
+
+                        with gr.Group(visible=bool(list_voice_profiles())) as bvc_preset_group:
+                            with gr.Row():
+                                bvc_saved_profile = gr.Dropdown(
+                                    label="Chọn Hồ sơ giọng cố định",
+                                    choices=list_voice_profiles(),
+                                    value=list_voice_profiles()[0] if list_voice_profiles() else None,
+                                    scale=3
+                                )
+                                bvc_preset_preview = gr.Audio(
+                                    label="Nghe thử",
+                                    value=get_voice_profile_preview(list_voice_profiles()[0]) if list_voice_profiles() else None,
+                                    interactive=False,
+                                    scale=2,
+                                    elem_classes="compact-audio"
+                                )
+
+                        with gr.Group(visible=not bool(list_voice_profiles())) as bvc_custom_group:
+                            bvc_ref_audio = gr.Audio(
+                                label="Shared Reference Audio / 共享参考音频",
+                                type="filepath",
+                                elem_classes="compact-audio",
+                            )
+                            bvc_ref_text = gr.Textbox(
+                                label="Shared Reference Text (optional) / 共享参考音频文本（可选）",
+                                placeholder="Leave empty to auto-transcribe.",
+                            )
+
+                        def _on_bvc_source_change(mode_choice):
+                            is_preset = "Hồ sơ giọng có sẵn" in mode_choice
+                            return gr.update(visible=is_preset), gr.update(visible=not is_preset)
+
+                        bvc_source_type.change(
+                            _on_bvc_source_change,
+                            inputs=[bvc_source_type],
+                            outputs=[bvc_preset_group, bvc_custom_group]
                         )
+                        bvc_saved_profile.change(
+                            lambda p: get_voice_profile_preview(p),
+                            inputs=[bvc_saved_profile],
+                            outputs=[bvc_preset_preview]
+                        )
+
                         with gr.Accordion("Shared Instruct (optional)", open=False):
                             bvc_instruct = gr.Textbox(label="Instruct", lines=2)
                         (
@@ -1159,6 +1370,8 @@ def build_demo(
 
                 def _batch_clone_fn(
                     lang, 
+                    source_type,
+                    saved_prof,
                     ref_audio,
                     ref_text,
                     text1,
@@ -1171,17 +1384,23 @@ def build_demo(
                     results = []
                     statuses = []
                     
-                    if not ref_audio:
-                        return None, None, None, None, None, "Error: Please upload a shared reference audio."
-                    
-                    try:
-                        # Pre-generate clone prompt
-                        prompt = model.create_voice_clone_prompt(
-                            ref_audio=ref_audio,
-                            ref_text=ref_text or None,
-                        )
-                    except Exception as e:
-                        return None, None, None, None, None, f"Error encoding reference audio: {e}"
+                    prompt = None
+                    actual_ref_audio = ref_audio
+                    if "Hồ sơ giọng có sẵn" in source_type and saved_prof:
+                        prompt, _ = load_voice_profile(saved_prof)
+                        actual_ref_audio = None
+                        if prompt is None:
+                            return None, None, None, None, None, f"Error: Không tìm thấy hồ sơ {saved_prof}.pt"
+                    elif ref_audio and str(ref_audio).strip():
+                        try:
+                            prompt = model.create_voice_clone_prompt(
+                                ref_audio=ref_audio,
+                                ref_text=ref_text or None,
+                            )
+                        except Exception as e:
+                            return None, None, None, None, None, f"Error encoding reference audio: {e}"
+                    else:
+                        return None, None, None, None, None, "Error: Vui lòng chọn hồ sơ giọng có sẵn hoặc tải lên file âm thanh mẫu."
                     
                     texts = [text1, text2, text3, text4, text5]
                     
@@ -1191,7 +1410,7 @@ def build_demo(
                                 res, stat = _gen(
                                     t.strip(),
                                     lang,
-                                    ref_audio,
+                                    actual_ref_audio,
                                     instruct,
                                     ns,
                                     gs,
@@ -1219,6 +1438,8 @@ def build_demo(
                     _batch_clone_fn,
                     inputs=[
                         bvc_lang,
+                        bvc_source_type,
+                        bvc_saved_profile,
                         bvc_ref_audio,
                         bvc_ref_text,
                         bvc_text1,
@@ -2042,25 +2263,36 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                     outputs=[am_status, am_output_audio, am_download_audio],
                 )
 
-        # Cross-tab Event Listeners: Đăng ký liên kết giữa Voice Manager và các tab sử dụng giọng
+        # Cross-tab Event Listeners: Đăng ký liên kết đồng bộ hóa 100% giữa Voice Manager và tất cả các tab
+        sync_all_outputs = [
+            # Voice Manager (4):
+            vm_profiles_list, vm_preview_audio, vm_info_md, vm_status,
+            # Voice Clone (5):
+            vc_source_type, vc_preset_group, vc_custom_group, vc_saved_profile, vc_preset_preview,
+            # Batch Voice Clone (5):
+            bvc_source_type, bvc_preset_group, bvc_custom_group, bvc_saved_profile, bvc_preset_preview,
+            # Script Clone (5):
+            sc_source_type, sc_preset_group, sc_custom_group, sc_saved_profile, sc_preset_preview
+        ]
+
         vm_save_btn.click(
             _on_vm_save,
             inputs=[vm_name, vm_audio, vm_text],
-            outputs=[vm_profiles_list, vc_saved_profile, sc_saved_profile, vm_preview_audio, vm_status],
+            outputs=sync_all_outputs,
         )
         vm_profiles_list.change(
             _on_vm_select,
             inputs=[vm_profiles_list],
-            outputs=[vm_preview_audio, vm_status],
+            outputs=[vm_preview_audio, vm_info_md, vm_status],
         )
         vm_refresh_btn.click(
             _on_vm_refresh,
-            outputs=[vm_profiles_list, vc_saved_profile, sc_saved_profile, vm_preview_audio, vm_status],
+            outputs=sync_all_outputs,
         )
         vm_delete_btn.click(
             _on_vm_delete,
             inputs=[vm_profiles_list],
-            outputs=[vm_profiles_list, vc_saved_profile, sc_saved_profile, vm_preview_audio, vm_status],
+            outputs=sync_all_outputs,
         )
 
     return demo
