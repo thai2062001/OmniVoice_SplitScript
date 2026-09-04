@@ -161,10 +161,11 @@ def _slugify_voice_name(name: str) -> str:
     """Safely converts voice profile name to clean filesystem-safe ASCII filename."""
     import unicodedata
     raw = (name or "").strip()
+    raw = raw.replace("đ", "d").replace("Đ", "D")
     nfkd = unicodedata.normalize('NFKD', raw)
     ascii_text = nfkd.encode('ASCII', 'ignore').decode('ASCII')
     safe = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', ascii_text)
-    safe = re.sub(r'_+', '_', safe).strip('_.')
+    safe = re.sub(r'[_\-]+', '_', safe).strip('_.')
     if not safe:
         safe = f"voice_profile_{int(time.time())}"
     return safe
@@ -309,11 +310,29 @@ def delete_voice_profile(name: str):
     return True
 
 
+def _normalize_audio_input(audio_in):
+    """Safely extracts a valid file path or audio object from various Gradio component types."""
+    if audio_in is None:
+        return None
+    if isinstance(audio_in, str):
+        return audio_in.strip()
+    if hasattr(audio_in, "name"):
+        return audio_in.name
+    if isinstance(audio_in, dict):
+        return audio_in.get("name") or audio_in.get("path")
+    return audio_in
+
+
 def extract_voice_prompt_safely(model: OmniVoice, audio_path: str, ref_txt: str = None, progress_cb=None):
     """
     Creates a VoiceClonePrompt safely. If ref_txt is empty and ASR is unavailable/fails,
     falls back gracefully with a neutral reference text to avoid crash.
+    Also handles silence trimming retry if audio is quiet.
     """
+    audio_path = _normalize_audio_input(audio_path)
+    if not audio_path:
+        raise ValueError("Đường dẫn file âm thanh mẫu không hợp lệ.")
+
     if progress_cb:
         progress_cb(0.3, desc="Đang phân tích âm thanh mẫu...")
         
@@ -345,10 +364,19 @@ def extract_voice_prompt_safely(model: OmniVoice, audio_path: str, ref_txt: str 
     if progress_cb:
         progress_cb(0.7, desc="Đang trích xuất vector đặc trưng (Neural Audio Codec)...")
         
-    prompt_obj = model.create_voice_clone_prompt(
-        ref_audio=audio_path,
-        ref_text=actual_ref_text,
-    )
+    try:
+        prompt_obj = model.create_voice_clone_prompt(
+            ref_audio=audio_path,
+            ref_text=actual_ref_text,
+            preprocess_prompt=True,
+        )
+    except Exception as e:
+        logging.warning(f"Prompt creation with preprocess_prompt=True failed ({e}), retrying without silence trimming...")
+        prompt_obj = model.create_voice_clone_prompt(
+            ref_audio=audio_path,
+            ref_text=actual_ref_text,
+            preprocess_prompt=False,
+        )
     return prompt_obj, actual_ref_text
 
 
@@ -1227,11 +1255,13 @@ def build_demo(
                 ):
                     loaded_prompt = None
                     actual_ref_audio = ref_aud
-                    if "Hồ sơ giọng có sẵn" in source_type and saved_prof:
+                    if "Hồ sơ giọng có sẵn" in source_type:
+                        if not saved_prof:
+                            return None, "❌ Lỗi: Vui lòng chọn một hồ sơ giọng đã lưu từ danh sách."
                         loaded_prompt, _ = load_voice_profile(saved_prof)
                         actual_ref_audio = None
                         if loaded_prompt is None:
-                            return None, f"Lỗi: Không tìm thấy file hồ sơ {saved_prof}.pt"
+                            return None, f"❌ Lỗi: Không tìm thấy file hồ sơ {saved_prof}.pt"
 
                     return _gen(
                         text,
@@ -1386,11 +1416,13 @@ def build_demo(
                     
                     prompt = None
                     actual_ref_audio = ref_audio
-                    if "Hồ sơ giọng có sẵn" in source_type and saved_prof:
+                    if "Hồ sơ giọng có sẵn" in source_type:
+                        if not saved_prof:
+                            return None, None, None, None, None, "❌ Lỗi: Vui lòng chọn một hồ sơ giọng đã lưu từ danh sách."
                         prompt, _ = load_voice_profile(saved_prof)
                         actual_ref_audio = None
                         if prompt is None:
-                            return None, None, None, None, None, f"Error: Không tìm thấy hồ sơ {saved_prof}.pt"
+                            return None, None, None, None, None, f"❌ Lỗi: Không tìm thấy hồ sơ {saved_prof}.pt"
                     elif ref_audio and str(ref_audio).strip():
                         try:
                             prompt = model.create_voice_clone_prompt(
@@ -1398,9 +1430,9 @@ def build_demo(
                                 ref_text=ref_text or None,
                             )
                         except Exception as e:
-                            return None, None, None, None, None, f"Error encoding reference audio: {e}"
+                            return None, None, None, None, None, f"❌ Lỗi trích xuất audio mẫu: {e}"
                     else:
-                        return None, None, None, None, None, "Error: Vui lòng chọn hồ sơ giọng có sẵn hoặc tải lên file âm thanh mẫu."
+                        return None, None, None, None, None, "❌ Lỗi: Vui lòng chọn hồ sơ giọng có sẵn hoặc tải lên file âm thanh mẫu."
                     
                     texts = [text1, text2, text3, text4, text5]
                     
@@ -1547,7 +1579,13 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                                 return gr.update()
                             try:
                                 path = file_obj.name if hasattr(file_obj, "name") else str(file_obj)
-                                with open(path, "r", encoding="utf-8") as f:
+                                for enc in ["utf-8-sig", "utf-8", "utf-16", "cp1252", "latin-1"]:
+                                    try:
+                                        with open(path, "r", encoding=enc) as f:
+                                            return f.read()
+                                    except (UnicodeDecodeError, UnicodeError):
+                                        continue
+                                with open(path, "r", encoding="utf-8", errors="ignore") as f:
                                     return f.read()
                             except Exception as e:
                                 gr.Warning(f"Lỗi đọc file: {e}")
@@ -1707,11 +1745,14 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
 
                     prompt = None
                     actual_ref_audio = ref_audio
-                    if "Hồ sơ giọng có sẵn" in source_type and saved_prof:
+                    if "Hồ sơ giọng có sẵn" in source_type:
+                        if not saved_prof:
+                            yield _render_script_page(current_page, segments, all_cache, temp_dir, None, "❌ Lỗi: Vui lòng chọn một hồ sơ giọng đã lưu từ danh sách.")
+                            return
                         prompt, _ = load_voice_profile(saved_prof)
                         actual_ref_audio = None
                         if prompt is None:
-                            yield _render_script_page(current_page, segments, all_cache, temp_dir, None, f"Error: Không thể nạp hồ sơ giọng {saved_prof}.pt")
+                            yield _render_script_page(current_page, segments, all_cache, temp_dir, None, f"❌ Lỗi: Không thể nạp hồ sơ giọng {saved_prof}.pt")
                             return
                     elif ref_audio and str(ref_audio).strip():
                         try:
@@ -1720,7 +1761,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                                 ref_text=ref_text or None,
                             )
                         except Exception as e:
-                            yield _render_script_page(current_page, segments, all_cache, temp_dir, None, f"Error encoding reference audio: {e}")
+                            yield _render_script_page(current_page, segments, all_cache, temp_dir, None, f"❌ Lỗi trích xuất audio mẫu: {e}")
                             return
                     
                     mode = "clone" if (prompt is not None or (ref_audio and str(ref_audio).strip())) else "design"
