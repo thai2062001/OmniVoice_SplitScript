@@ -5,13 +5,19 @@ from omnivoice.webui.components import create_lang_dropdown, create_gen_settings
 
 def build_voice_clone_tab(_gen):
     """Constructs the Voice Clone Tab UI and internal event listeners."""
-    with gr.TabItem("Voice Clone"):
+    with gr.TabItem("👤 Nhân Bản Giọng (Voice Clone)"):
+        gr.Markdown(
+            """
+### 👤 Nhân Bản Giọng Nói Đơn Lẻ (Voice Clone)
+*Tạo giọng đọc mô phỏng theo mẫu giọng đã lưu hoặc tải lên đoạn âm thanh ngắn (3-10s).*
+"""
+        )
         with gr.Row():
             with gr.Column(scale=1):
                 vc_text = gr.Textbox(
-                    label="Text to Synthesize / 待合成文本",
+                    label="Văn bản cần đọc (Text to Synthesize)",
                     lines=4,
-                    placeholder="Enter the text you want to synthesize...",
+                    placeholder="Nhập đoạn văn bản bạn muốn chuyển thành giọng nói...",
                 )
 
                 vc_source_type = gr.Radio(
@@ -38,19 +44,19 @@ def build_voice_clone_tab(_gen):
 
                 with gr.Group(visible=not bool(list_voice_profiles())) as vc_custom_group:
                     vc_ref_audio = gr.Audio(
-                        label="Reference Audio / 参考音频",
+                        label="File âm thanh giọng mẫu (Reference Audio)",
                         type="filepath",
                         elem_classes="compact-audio",
                     )
                     gr.Markdown(
                         "<span style='font-size:0.85em;color:#888;'>"
-                        "Recommended: 3–10 seconds audio. "
+                        "Khuyến nghị: File audio dài 3–10 giây, giọng đọc rõ ràng."
                         "</span>"
                     )
                     vc_ref_text = gr.Textbox(
-                        label=("Reference Text (optional) / 参考音频文本（可选）"),
+                        label="Văn bản của giọng mẫu (Tùy chọn)",
                         lines=2,
-                        placeholder="Transcript of the reference audio. Leave empty to auto-transcribe via ASR models.",
+                        placeholder="Nội dung người trong audio nói. Để trống nếu muốn tự động nhận diện (ASR).",
                     )
 
                 def _on_vc_source_change(mode_choice):
@@ -68,9 +74,9 @@ def build_voice_clone_tab(_gen):
                     outputs=[vc_preset_preview]
                 )
 
-                vc_lang = create_lang_dropdown("Language (optional) / 语种 (可选)")
-                with gr.Accordion("Instruct (optional)", open=False):
-                    vc_instruct = gr.Textbox(label="Instruct", lines=2)
+                vc_lang = create_lang_dropdown("Ngôn ngữ (Language)")
+                with gr.Accordion("Chỉ dẫn phong cách / Cảm xúc (Tùy chọn)", open=False):
+                    vc_instruct = gr.Textbox(label="Chỉ dẫn phong cách (Instruct)", placeholder="Ví dụ: whisper, high pitch, low pitch, dramatic...", lines=2)
                 (
                     vc_ns,
                     vc_gs,
@@ -80,13 +86,13 @@ def build_voice_clone_tab(_gen):
                     vc_pp,
                     vc_po,
                 ) = create_gen_settings()
-                vc_btn = gr.Button("Generate / 生成", variant="primary")
+                vc_btn = gr.Button("🚀 Bắt Đầu Tạo Giọng (Voice Clone)", variant="primary")
             with gr.Column(scale=1):
                 vc_audio = gr.Audio(
-                    label="Output Audio / 合成结果",
+                    label="🔊 Kết Quả Âm Thanh",
                     type="numpy",
                 )
-                vc_status = gr.Textbox(label="Status / 状态", lines=2)
+                vc_status = gr.Textbox(label="Trạng thái", lines=2)
 
         def _clone_fn(
             text, lang, source_type, saved_prof, ref_aud, ref_text, instruct, ns, gs, dn, sp, du, pp, po

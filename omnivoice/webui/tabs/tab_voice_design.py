@@ -5,17 +5,23 @@ from omnivoice.webui.components import create_lang_dropdown, create_gen_settings
 
 def build_voice_design_tab(_gen):
     """Constructs the Voice Design Tab UI and internal event listeners."""
-    with gr.TabItem("Voice Design"):
+    with gr.TabItem("🎨 Thiết Kế Giọng (Voice Design)"):
+        gr.Markdown(
+            """
+### 🎨 Thiết Kế Giọng Nói AI Hoàn Toàn Mới (Voice Design)
+*Tạo giọng đọc nhân tạo từ số 0 bằng cách kết hợp các đặc tính (Giới tính, Độ tuổi, Âm điệu, Phong cách, Accent) mà **không cần audio mẫu**.*
+"""
+        )
         with gr.Row():
             with gr.Column(scale=1):
                 vd_text = gr.Textbox(
-                    label="Text to Synthesize / 待合成文本",
+                    label="Văn bản cần đọc (Text to Synthesize)",
                     lines=4,
-                    placeholder="Enter the text you want to synthesize...",
+                    placeholder="Nhập nội dung bạn muốn giọng AI đọc vào đây...",
                 )
-                vd_lang = create_lang_dropdown()
+                vd_lang = create_lang_dropdown("Ngôn ngữ (Language)")
 
-                _AUTO = "Auto"
+                _AUTO = "Tự động (Auto)"
                 vd_groups = []
                 for _cat, _choices in _CATEGORIES.items():
                     vd_groups.append(
@@ -36,35 +42,42 @@ def build_voice_design_tab(_gen):
                     vd_pp,
                     vd_po,
                 ) = create_gen_settings()
-                vd_btn = gr.Button("Generate / 生成", variant="primary")
+                vd_btn = gr.Button("🚀 Bắt Đầu Tạo Giọng (Voice Design)", variant="primary")
             with gr.Column(scale=1):
                 vd_audio = gr.Audio(
-                    label="Output Audio / 合成结果",
+                    label="🔊 Kết Quả Âm Thanh",
                     type="numpy",
                 )
-                vd_status = gr.Textbox(label="Status / 状态", lines=2)
+                vd_status = gr.Textbox(label="Trạng thái", lines=2)
 
         def _build_instruct(groups):
             """Extract instruct text from UI dropdowns."""
-            selected = [g for g in groups if g and g != "Auto"]
+            selected = [g for g in groups if g and g != "Tự động (Auto)" and g != "Auto"]
             if not selected:
                 return None
             parts = []
             for v in selected:
-                if " / " in v:
-                    en, zh = v.split(" / ", 1)
-                    # Dialects have no English equivalent
-                    if "Dialect" in v.split(" / ")[0]:
-                        parts.append(zh.strip())
+                # Extract English tag in parentheses if available e.g. "Nam (Male)" -> "Male"
+                import re
+                match_paren = re.search(r'\(([^)]+)\)', v)
+                if match_paren:
+                    inner = match_paren.group(1).strip()
+                    if " / " in inner:
+                        # Chinese dialect: "Henan Dialect / 河南话"
+                        parts.append(inner.split(" / ")[-1].strip())
                     else:
-                        parts.append(en.strip())
+                        parts.append(inner)
+                elif " / " in v:
+                    parts.append(v.split(" / ")[0].strip())
                 else:
                     parts.append(v)
             return ", ".join(parts)
 
         def _design_fn(text, lang, ns, gs, dn, sp, du, pp, po, *groups):
+            if not text or not text.strip():
+                return None, "Vui lòng nhập văn bản cần tổng hợp giọng nói."
             return _gen(
-                text,
+                text.strip(),
                 lang,
                 None,
                 _build_instruct(groups),

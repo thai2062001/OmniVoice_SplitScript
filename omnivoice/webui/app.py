@@ -24,6 +24,7 @@ from omnivoice.webui.tabs.tab_batch_clone import build_batch_clone_tab
 from omnivoice.webui.tabs.tab_script_clone import build_script_clone_tab
 from omnivoice.webui.tabs.tab_voice_design import build_voice_design_tab
 from omnivoice.webui.tabs.tab_audio_merger import build_audio_merger_tab
+from omnivoice.webui.tabs.tab_guide import build_guide_tab
 
 
 def start_cloudflare_tunnel(port: int):
@@ -207,13 +208,14 @@ def build_demo(
                 )
 
         with gr.Tabs():
-            # Build all 6 Tabs modularly
+            # Build all Tabs modularly (Voice Manager, Voice Clone, Batch Clone, Script Clone, Voice Design, Audio Merger, User Guide)
             vm_comps = build_voice_manager_tab(model, _gen)
             vc_comps = build_voice_clone_tab(_gen)
             bvc_comps = build_batch_clone_tab(model, _gen)
             sc_comps = build_script_clone_tab(model, _gen)
             vd_comps = build_voice_design_tab(_gen)
             am_comps = build_audio_merger_tab()
+            guide_comps = build_guide_tab()
 
         # Cross-tab synchronizer
         def _sync_all_tabs(target_profile=None, msg=""):

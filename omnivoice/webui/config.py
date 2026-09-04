@@ -47,56 +47,57 @@ _SAVED_VOICES_DIR, _OUTPUTS_DIR, _IS_GDRIVE = _get_storage_dirs()
 _ALL_LANGUAGES = ["Auto"] + sorted(lang_display_name(n) for n in LANG_NAMES)
 
 # ---------------------------------------------------------------------------
-# Voice Design instruction templates
+# ---------------------------------------------------------------------------
+# Voice Design instruction templates (Vietnamese UI)
 # ---------------------------------------------------------------------------
 _CATEGORIES = {
-    "Gender / 性别": ["Male / 男", "Female / 女"],
-    "Age / 年龄": [
-        "Child / 儿童",
-        "Teenager / 少年",
-        "Young Adult / 青年",
-        "Middle-aged / 中年",
-        "Elderly / 老年",
+    "Giới tính (Gender)": ["Nam (Male)", "Nữ (Female)"],
+    "Độ tuổi (Age)": [
+        "Trẻ em (Child)",
+        "Thiếu niên (Teenager)",
+        "Thanh niên (Young Adult)",
+        "Trung niên (Middle-aged)",
+        "Lớn tuổi (Elderly)",
     ],
-    "Pitch / 音调": [
-        "Very Low Pitch / 极低音调",
-        "Low Pitch / 低音调",
-        "Moderate Pitch / 中音调",
-        "High Pitch / 高音调",
-        "Very High Pitch / 极高音调",
+    "Âm điệu (Pitch)": [
+        "Cực kỳ trầm (Very Low Pitch)",
+        "Trầm / Điềm đạm (Low Pitch)",
+        "Vừa phải / Tự nhiên (Moderate Pitch)",
+        "Cao / Sôi nổi (High Pitch)",
+        "Cực cao / Phấn khích (Very High Pitch)",
     ],
-    "Style / 风格": ["Whisper / 耳语"],
-    "English Accent / 英文口音": [
-        "American Accent / 美式口音",
-        "Australian Accent / 澳大利亚口音",
-        "British Accent / 英国口音",
-        "Chinese Accent / 中国口音",
-        "Canadian Accent / 加拿大口音",
-        "Indian Accent / 印度口音",
-        "Korean Accent / 韩国口音",
-        "Portuguese Accent / 葡萄牙口音",
-        "Russian Accent / 俄罗斯口音",
-        "Japanese Accent / 日本口音",
+    "Phong cách (Style)": ["Thì thầm / Tâm sự (Whisper)"],
+    "Chất giọng Quốc tế (Accent)": [
+        "Giọng Mỹ (American Accent)",
+        "Giọng Úc (Australian Accent)",
+        "Giọng Anh (British Accent)",
+        "Giọng Trung Quốc (Chinese Accent)",
+        "Giọng Canada (Canadian Accent)",
+        "Giọng Ấn Độ (Indian Accent)",
+        "Giọng Hàn Quốc (Korean Accent)",
+        "Giọng Bồ Đào Nha (Portuguese Accent)",
+        "Giọng Nga (Russian Accent)",
+        "Giọng Nhật Bản (Japanese Accent)",
     ],
-    "Chinese Dialect / 中文方言": [
-        "Henan Dialect / 河南话",
-        "Shaanxi Dialect / 陕西话",
-        "Sichuan Dialect / 四川话",
-        "Guizhou Dialect / 贵州话",
-        "Yunnan Dialect / 云南话",
-        "Guilin Dialect / 桂林话",
-        "Jinan Dialect / 济南话",
-        "Shijiazhuang Dialect / 石家庄话",
-        "Gansu Dialect / 甘肃话",
-        "Ningxia Dialect / 宁夏话",
-        "Qingdao Dialect / 青岛话",
-        "Northeast Dialect / 东北话",
+    "Phương ngữ tiếng Trung (Chinese Dialect)": [
+        "Hà Nam (Henan Dialect / 河南话)",
+        "Thiểm Tây (Shaanxi Dialect / 陕西话)",
+        "Tứ Xuyên (Sichuan Dialect / 四川话)",
+        "Quý Châu (Guizhou Dialect / 贵州话)",
+        "Vân Nam (Yunnan Dialect / 云南话)",
+        "Quế Lâm (Guilin Dialect / 桂林话)",
+        "Tế Nam (Jinan Dialect / 济南话)",
+        "Thạch Gia Trang (Shijiazhuang Dialect / 石家庄话)",
+        "Cam Túc (Gansu Dialect / 甘肃话)",
+        "Ninh Hạ (Ningxia Dialect / 宁夏话)",
+        "Thanh Đảo (Qingdao Dialect / 青岛话)",
+        "Đông Bắc (Northeast Dialect / 东北话)",
     ],
 }
 
 _ATTR_INFO = {
-    "English Accent / 英文口音": "Only effective for English speech.",
-    "Chinese Dialect / 中文方言": "Only effective for Chinese speech.",
+    "Chất giọng Quốc tế (Accent)": "Có hiệu lực rõ nhất khi đọc tiếng Anh.",
+    "Phương ngữ tiếng Trung (Chinese Dialect)": "Có hiệu lực khi đọc tiếng Trung.",
 }
 
 

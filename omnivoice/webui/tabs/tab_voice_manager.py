@@ -28,7 +28,7 @@ def format_voice_info(name):
 
 def build_voice_manager_tab(model, _gen):
     """Constructs the Voice Manager Tab UI and internal event listeners."""
-    with gr.TabItem("🎙️ Voice Manager / Quản lý Hồ sơ Giọng"):
+    with gr.TabItem("🎙️ Quản Lý Hồ Sơ Giọng (Voice Manager)"):
         gr.Markdown(
             """
 ### 🎙️ Quản lý & Lưu Trữ Hồ Sơ Giọng Mẫu Cố Định (.pt Embedding)

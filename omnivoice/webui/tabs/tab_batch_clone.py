@@ -5,10 +5,16 @@ from omnivoice.webui.components import create_lang_dropdown, create_gen_settings
 
 def build_batch_clone_tab(model, _gen):
     """Constructs the Batch Voice Clone Tab UI and internal event listeners."""
-    with gr.TabItem("Batch Voice Clone"):
+    with gr.TabItem("📑 Clone Hàng Loạt (Batch Clone)"):
+        gr.Markdown(
+            """
+### 📑 Nhân Bản Giọng Nói Hàng Loạt (5 Câu Độc Lập)
+*Sinh giọng nhanh cho 5 câu văn bản riêng biệt sử dụng chung một giọng mẫu cố định.*
+"""
+        )
         with gr.Row():
             with gr.Column(scale=1):
-                bvc_lang = create_lang_dropdown("Language (optional) / 语种 (可选)")
+                bvc_lang = create_lang_dropdown("Ngôn ngữ (Language)")
                 
                 bvc_source_type = gr.Radio(
                     choices=["🎙️ Sử dụng Hồ sơ giọng có sẵn (.pt)", "📤 Tải lên Audio mẫu mới"],
@@ -34,13 +40,13 @@ def build_batch_clone_tab(model, _gen):
 
                 with gr.Group(visible=not bool(list_voice_profiles())) as bvc_custom_group:
                     bvc_ref_audio = gr.Audio(
-                        label="Shared Reference Audio / 共享参考音频",
+                        label="File âm thanh giọng mẫu dùng chung (Reference Audio)",
                         type="filepath",
                         elem_classes="compact-audio",
                     )
                     bvc_ref_text = gr.Textbox(
-                        label="Shared Reference Text (optional) / 共享参考音频文本（可选）",
-                        placeholder="Leave empty to auto-transcribe.",
+                        label="Văn bản giọng mẫu (Tùy chọn)",
+                        placeholder="Để trống nếu muốn tự động nhận diện (ASR).",
                     )
 
                 def _on_bvc_source_change(mode_choice):
@@ -58,8 +64,8 @@ def build_batch_clone_tab(model, _gen):
                     outputs=[bvc_preset_preview]
                 )
 
-                with gr.Accordion("Shared Instruct (optional)", open=False):
-                    bvc_instruct = gr.Textbox(label="Instruct", lines=2)
+                with gr.Accordion("Chỉ dẫn phong cách dùng chung (Tùy chọn)", open=False):
+                    bvc_instruct = gr.Textbox(label="Chỉ dẫn phong cách (Instruct)", placeholder="Ví dụ: whisper, high pitch, low pitch...", lines=2)
                 (
                     bvc_ns,
                     bvc_gs,
@@ -70,34 +76,34 @@ def build_batch_clone_tab(model, _gen):
                     bvc_po,
                 ) = create_gen_settings()
 
-                bvc_text1 = gr.Textbox(label="Text 1 / 文本 1", lines=2)
-                bvc_text2 = gr.Textbox(label="Text 2 / 文本 2", lines=2)
-                bvc_text3 = gr.Textbox(label="Text 3 / 文本 3", lines=2)
-                bvc_text4 = gr.Textbox(label="Text 4 / 文本 4", lines=2)
-                bvc_text5 = gr.Textbox(label="Text 5 / 文本 5", lines=2)
-                bvc_btn = gr.Button("Batch Generate / 批量生成", variant="primary")
+                bvc_text1 = gr.Textbox(label="Văn bản Câu 1", lines=2)
+                bvc_text2 = gr.Textbox(label="Văn bản Câu 2", lines=2)
+                bvc_text3 = gr.Textbox(label="Văn bản Câu 3", lines=2)
+                bvc_text4 = gr.Textbox(label="Văn bản Câu 4", lines=2)
+                bvc_text5 = gr.Textbox(label="Văn bản Câu 5", lines=2)
+                bvc_btn = gr.Button("🚀 Bắt Đầu Tạo Giọng Hàng Loạt", variant="primary")
             with gr.Column(scale=1):
                 bvc_audio1 = gr.Audio(
-                    label="Output Voice 1 / 合成结果 1",
+                    label="🔊 Kết Quả Câu 1",
                     type="numpy",
                 )
                 bvc_audio2 = gr.Audio(
-                    label="Output Voice 2 / 合成结果 2",
+                    label="🔊 Kết Quả Câu 2",
                     type="numpy",
                 )
                 bvc_audio3 = gr.Audio(
-                    label="Output Voice 3 / 合成结果 3",
+                    label="🔊 Kết Quả Câu 3",
                     type="numpy",
                 )
                 bvc_audio4 = gr.Audio(
-                    label="Output Voice 4 / 合成结果 4",
+                    label="🔊 Kết Quả Câu 4",
                     type="numpy",
                 )
                 bvc_audio5 = gr.Audio(
-                    label="Output Voice 5 / 合成结果 5",
+                    label="🔊 Kết Quả Câu 5",
                     type="numpy",
                 )
-                bvc_status = gr.Textbox(label="Status / 状态", lines=5)
+                bvc_status = gr.Textbox(label="Trạng thái & Tiến trình", lines=5)
 
         def _batch_clone_fn(
             lang, 

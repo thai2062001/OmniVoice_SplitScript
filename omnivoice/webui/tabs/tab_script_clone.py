@@ -15,16 +15,16 @@ PAGE_SIZE = 10
 
 def build_script_clone_tab(model, _gen):
     """Constructs the Script Clone Tab UI and internal event listeners."""
-    with gr.TabItem("Script Clone / Sinh giọng theo Kịch bản"):
+    with gr.TabItem("🎬 Sinh Giọng Kịch Bản (Script Clone)"):
         sc_page_state = gr.State(value=0)
         sc_cache_state = gr.State(value={})
         sc_temp_dir_state = gr.State(value="")
 
         with gr.Row():
             with gr.Column(scale=1):
-                sc_lang = create_lang_dropdown("Language (optional) / 语种 (可选)")
+                sc_lang = create_lang_dropdown("Ngôn ngữ (Language)")
                 
-                gr.Markdown("### 1. Chọn Giọng Mẫu (Voice Profile / Custom Audio)")
+                gr.Markdown("### 1. Chọn Giọng Mẫu (Voice Profile / Audio Mẫu)")
                 sc_source_type = gr.Radio(
                     choices=["🎙️ Sử dụng Hồ sơ giọng có sẵn (.pt)", "📤 Tải lên Audio mẫu mới"],
                     value="🎙️ Sử dụng Hồ sơ giọng có sẵn (.pt)" if list_voice_profiles() else "📤 Tải lên Audio mẫu mới",
@@ -49,13 +49,13 @@ def build_script_clone_tab(model, _gen):
 
                 with gr.Group(visible=not bool(list_voice_profiles())) as sc_custom_group:
                     sc_ref_audio = gr.Audio(
-                        label="Shared Reference Audio (Optional for Voice Cloning) / Giọng nói mẫu dùng chung (Tùy chọn)",
+                        label="File âm thanh mẫu dùng chung (Reference Audio)",
                         type="filepath",
                         elem_classes="compact-audio",
                     )
                     sc_ref_text = gr.Textbox(
-                        label="Shared Reference Text (optional) / Văn bản giọng mẫu (Tùy chọn)",
-                        placeholder="Leave empty to auto-transcribe.",
+                        label="Văn bản giọng mẫu (Tùy chọn)",
+                        placeholder="Để trống nếu muốn tự động nhận diện (ASR).",
                     )
 
                 def _on_sc_source_change(mode_choice):
@@ -73,11 +73,11 @@ def build_script_clone_tab(model, _gen):
                     outputs=[sc_preset_preview]
                 )
                 
-                gr.Markdown("### 2. Paste Script / Dán Kịch bản timeline")
+                gr.Markdown("### 2. Dán Kịch Bản / Timeline")
                 sc_script = gr.Textbox(
-                    label="Script / Kịch bản",
+                    label="Kịch bản phân đoạn (Script)",
                     lines=12,
-                    placeholder="[#1] THỜI GIAN: 0.0 -> 5.0\nVĂN BẢN (JP): 日本のコンビニ...\nCẢM XÚC: Energetic\nHƯỚNG DẪN AI: High energy intro\n------------------------------------------",
+                    placeholder="[#1] THỜI GIAN: 0.0 -> 5.0\nVĂN BẢN: Nội dung câu 1...\nCẢM XÚC: Hài hước\nHƯỚNG DẪN AI: High energy intro\n------------------------------------------",
                     value="""After clawing your way out of your automated smart-home trap, an even bigger disaster strikes your pockets: Apple Pay and credit cards instantly turn into worthless plastic junk!
 Picture yourself pulling into the Starbucks Drive-thru, ordering an iced oat milk caramel macchiato with extra cold foam for nine whole dollars.
 You casually flick your wrist, tapping your shiny Apple Watch against the contactless payment terminal, waiting for that sleek, reassuring digital "beep."
@@ -180,13 +180,13 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
 
                 def _on_gemini_analyze(script_text, api_key, model_nm, progress=gr.Progress()):
                     if not script_text or not script_text.strip():
-                        gr.Warning("Vui lòng dán kịch bản vào ô trước khi phân tích.")
-                        return gr.update(visible=False), "", "Vui lòng nhập kịch bản trước."
-                    progress(0.3, desc="Đang gửi kịch bản đến Gemini AI để phân tích ngữ cảnh...")
+                        gr.Warning("Vui lòng nhập hoặc import kịch bản trước khi phân tích.")
+                        return gr.update(visible=False), "", "Kịch bản trống."
                     try:
-                        suggested = analyze_script_with_gemini(script_text, api_key, model_nm)
-                        progress(1.0, desc="Đã phân tích xong cảm xúc cho các phân đoạn!")
-                        return gr.update(visible=True), suggested, "✅ Gemini đã phân tích xong! Vui lòng xem trước và bấm 'Đồng ý & Áp dụng'."
+                        progress(0.2, desc="Đang gửi kịch bản đến Gemini AI...")
+                        res = analyze_script_with_gemini(script_text, api_key, model_nm)
+                        progress(1.0, desc="Phân tích thành công!")
+                        return gr.update(visible=True), res, "✅ Gemini đã phân tích xong! Hãy kiểm tra và bấm 'Đồng ý & Áp dụng'."
                     except Exception as e:
                         gr.Warning(f"Lỗi phân tích Gemini: {e}")
                         return gr.update(visible=False), "", f"Lỗi Gemini: {e}"
@@ -228,14 +228,14 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                 with gr.Group():
                     for i in range(1, 11):
                         with gr.Row(elem_classes="segment-card"):
-                            aud = gr.Audio(label=f"Segment {i} Output", type="numpy", scale=4)
+                            aud = gr.Audio(label=f"Phân đoạn #{i}", type="numpy", scale=4)
                             btn = gr.Button("🔄 Thử lại", size="sm", scale=1)
                             sc_audios.append(aud)
                             sc_retries.append(btn)
                 
-                sc_zip = gr.File(label="Download All WAVs (ZIP) / Tải xuống tất cả các tệp (ZIP)")
-                sc_parsed_markdown = gr.Markdown(label="Parsed Script Summary / Tóm tắt kịch bản đã phân tích")
-                sc_status = gr.Textbox(label="Status & Live Logs / Tiến trình trực tiếp", lines=5)
+                sc_zip = gr.File(label="💾 Tải về toàn bộ file âm thanh (.ZIP)")
+                sc_parsed_markdown = gr.Markdown(label="Tóm tắt phân đoạn kịch bản")
+                sc_status = gr.Textbox(label="Trạng thái & Tiến trình trực tiếp", lines=5)
 
         def _generate_segments_core(
             lang, source_type, saved_prof, ref_audio, ref_text, script_text,
