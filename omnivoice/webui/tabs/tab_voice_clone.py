@@ -24,7 +24,30 @@ def build_voice_clone_tab(_gen):
                         lines=4,
                         placeholder="Nhập nội dung bạn muốn giọng AI đọc vào đây...",
                     )
+                    with gr.Row():
+                        vc_copy_btn = gr.Button("📋 Sao chép văn bản", size="sm", elem_classes="btn-copy-action", scale=1)
+                        vc_char_count = gr.Markdown("📊 Số ký tự: **0** | Ước tính độ dài: **0s**", elem_classes="char-counter")
                     vc_lang = create_lang_dropdown("Ngôn ngữ giọng đọc (Language)")
+
+                    def _update_vc_char_counter(txt):
+                        txt = txt or ""
+                        char_len = len(txt)
+                        word_len = len(txt.split()) if txt else 0
+                        # Khoảng 3 từ / giây
+                        est_sec = round(word_len / 2.8, 1) if word_len > 0 else 0
+                        return f"📊 **{char_len}** ký tự ({word_len} từ) | Ước tính: **~{est_sec}s**"
+
+                    vc_text.change(
+                        _update_vc_char_counter,
+                        inputs=[vc_text],
+                        outputs=[vc_char_count]
+                    )
+                    vc_copy_btn.click(
+                        None,
+                        inputs=[vc_text],
+                        outputs=None,
+                        js="(txt) => { window.copyTextToClipboard(txt, '📋 Đã sao chép văn bản vào bộ nhớ tạm!'); }"
+                    )
 
                 with gr.Group(elem_classes="ux-card"):
                     gr.Markdown("### 🎙️ Bước 2: Nguồn Giọng Mẫu")
@@ -104,7 +127,11 @@ def build_voice_clone_tab(_gen):
                         label="File âm thanh đã tạo",
                         type="numpy",
                     )
-                    vc_status = gr.Textbox(label="Trạng thái & Tiến trình", lines=3)
+                    vc_status = gr.Textbox(
+                        label="Trạng thái & Tiến trình",
+                        lines=3,
+                        value="🟢 Hệ thống sẵn sàng tạo âm thanh."
+                    )
 
         def _clone_fn(
             text, lang, source_type, saved_prof, ref_aud, ref_text, instruct, ns, gs, dn, sp, du, pp, po

@@ -101,6 +101,23 @@ Over at local grocery supermarkets, pure retail comedy unfolds as cloud-based ba
 Cashiers dust off vintage Casio desktop calculators, manually typing in the price of every cereal box while squinting at tiny yellow price stickers on shelf edges.
 Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, while managers weigh vegetables on antique mechanical balance scales with swinging needles!"""
                     )
+                    with gr.Row():
+                        sc_copy_btn = gr.Button("📋 Sao chép kịch bản", size="sm", elem_classes="btn-copy-action", scale=1)
+                        sc_stat_count = gr.Markdown("📊 **10** dòng | **184** từ | Tổng ký tự: **1248**", elem_classes="char-counter")
+
+                    def _update_sc_stats(txt):
+                        txt = txt or ""
+                        lines = [l for l in txt.strip().split("\n") if l.strip()]
+                        words = txt.split()
+                        return f"📊 **{len(lines)}** dòng | **{len(words)}** từ | Tổng ký tự: **{len(txt)}**"
+
+                    sc_script.change(_update_sc_stats, inputs=[sc_script], outputs=[sc_stat_count])
+                    sc_copy_btn.click(
+                        None,
+                        inputs=[sc_script],
+                        outputs=None,
+                        js="(txt) => { window.copyTextToClipboard(txt, '📋 Đã sao chép kịch bản vào bộ nhớ tạm!'); }"
+                    )
 
                     with gr.Accordion("📂 Nhập kịch bản từ file (.txt / .md)", open=False):
                         with gr.Row():

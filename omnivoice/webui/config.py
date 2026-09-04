@@ -347,6 +347,63 @@ def get_theme_and_css():
         color: #ffffff;
     }
 
+    /* Character Counter styling */
+    .char-counter {
+        font-size: 12px;
+        color: #71717a;
+        text-align: right;
+        margin-top: 4px;
+        font-weight: 500;
+    }
+    .dark .char-counter {
+        color: #a1a1aa;
+    }
+
+    /* Toast Notification */
+    #omni-toast {
+        visibility: hidden;
+        min-width: 250px;
+        background: #18181b;
+        color: #ffffff;
+        text-align: center;
+        border-radius: 8px;
+        padding: 12px 18px;
+        position: fixed;
+        z-index: 9999;
+        bottom: 30px;
+        right: 30px;
+        font-size: 14px;
+        font-weight: 500;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+        border: 1px solid rgba(255,255,255,0.15);
+        opacity: 0;
+        transition: opacity 0.3s, bottom 0.3s, visibility 0.3s;
+    }
+    #omni-toast.show {
+        visibility: visible;
+        opacity: 1;
+        bottom: 40px;
+    }
+
+    /* Copy Button */
+    .btn-copy-action {
+        font-size: 12px !important;
+        padding: 4px 10px !important;
+        border-radius: 6px !important;
+        background: #f4f4f5 !important;
+        border: 1px solid #e4e4e7 !important;
+        color: #3f3f46 !important;
+    }
+    .dark .btn-copy-action {
+        background: #27272a !important;
+        border: 1px solid #3f3f46 !important;
+        color: #d4d4d8 !important;
+    }
+    .btn-copy-action:hover {
+        background: #e4e4e7 !important;
+        color: #18181b !important;
+    }
+
     /* Clean subtle scrollbars */
     ::-webkit-scrollbar {
         width: 6px;
@@ -364,17 +421,64 @@ def get_theme_and_css():
 
 
 def get_head_js() -> str:
-    """Returns Client-side Keep-Alive JavaScript snippet for preventing Colab idle disconnections."""
+    """Returns Client-side Keep-Alive JavaScript snippet for preventing Colab idle disconnections and Toast notification / Copy helpers."""
     return """
     <script>
     (function() {
-        console.log("⚡ OmniVoice Colab Keep-Alive Active.");
+        console.log("⚡ OmniVoice Colab Keep-Alive & UI Enhancements Active.");
+        
+        // Colab Keep-Alive Heartbeat
         setInterval(function() {
             try {
-                // Heartbeat ping to keep browser session & tunnel websocket alive
                 fetch(window.location.href, { method: 'HEAD', mode: 'no-cors', cache: 'no-store' }).catch(function(){});
             } catch(e) {}
         }, 45000);
+
+        // Toast Notification System
+        window.showOmniToast = function(msg) {
+            let toast = document.getElementById("omni-toast");
+            if (!toast) {
+                toast = document.createElement("div");
+                toast.id = "omni-toast";
+                document.body.appendChild(toast);
+            }
+            toast.innerText = msg;
+            toast.className = "show";
+            setTimeout(function() {
+                toast.className = toast.className.replace("show", "");
+            }, 3000);
+        };
+
+        // Clipboard Copy Helper
+        window.copyTextToClipboard = function(text, successMsg) {
+            if (!text) return;
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(function() {
+                    window.showOmniToast(successMsg || "📋 Đã sao chép vào bộ nhớ tạm!");
+                }).catch(function() {
+                    _fallbackCopy(text, successMsg);
+                });
+            } else {
+                _fallbackCopy(text, successMsg);
+            }
+        };
+
+        function _fallbackCopy(text, successMsg) {
+            var textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-999999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                window.showOmniToast(successMsg || "📋 Đã sao chép vào bộ nhớ tạm!");
+            } catch (err) {
+                console.error('Fallback copy failed', err);
+            }
+            document.body.removeChild(textArea);
+        }
     })();
     </script>
     """
