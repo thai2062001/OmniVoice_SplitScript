@@ -1687,35 +1687,39 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                         ) = _gen_settings()
 
                         with gr.Row():
-                            sc_btn = gr.Button("▶ Sinh đợt này (5 phân đoạn)", variant="primary", scale=2)
+                            sc_btn = gr.Button("▶ Sinh đợt này (10 phân đoạn)", variant="primary", scale=2)
                             sc_next_btn = gr.Button("⏭ Đợt tiếp theo", variant="secondary", scale=1)
                         sc_all_btn = gr.Button("⚡ Sinh TOÀN BỘ kịch bản", variant="primary")
                     with gr.Column(scale=1):
                         with gr.Row():
                             sc_prev_view_btn = gr.Button("◀ Đợt trước", size="sm", scale=1)
-                            sc_page_info = gr.Markdown("### 📑 Đang xem: Phân đoạn 1 - 5", elem_classes="text-center")
+                            sc_page_info = gr.Markdown("### 📑 Đang xem: Phân đoạn 1 - 10", elem_classes="text-center")
                             sc_next_view_btn = gr.Button("Đợt sau ▶", size="sm", scale=1)
 
+                        sc_audios = []
+                        sc_retries = []
                         with gr.Group():
-                            with gr.Row(elem_classes="segment-card"):
-                                sc_audio1 = gr.Audio(label="Segment 1 Output", type="numpy", scale=4)
-                                sc_retry1 = gr.Button("🔄 Thử lại", size="sm", scale=1)
-                            with gr.Row(elem_classes="segment-card"):
-                                sc_audio2 = gr.Audio(label="Segment 2 Output", type="numpy", scale=4)
-                                sc_retry2 = gr.Button("🔄 Thử lại", size="sm", scale=1)
-                            with gr.Row(elem_classes="segment-card"):
-                                sc_audio3 = gr.Audio(label="Segment 3 Output", type="numpy", scale=4)
-                                sc_retry3 = gr.Button("🔄 Thử lại", size="sm", scale=1)
-                            with gr.Row(elem_classes="segment-card"):
-                                sc_audio4 = gr.Audio(label="Segment 4 Output", type="numpy", scale=4)
-                                sc_retry4 = gr.Button("🔄 Thử lại", size="sm", scale=1)
-                            with gr.Row(elem_classes="segment-card"):
-                                sc_audio5 = gr.Audio(label="Segment 5 Output", type="numpy", scale=4)
-                                sc_retry5 = gr.Button("🔄 Thử lại", size="sm", scale=1)
+                            for i in range(1, 11):
+                                with gr.Row(elem_classes="segment-card"):
+                                    aud = gr.Audio(label=f"Segment {i} Output", type="numpy", scale=4)
+                                    btn = gr.Button("🔄 Thử lại", size="sm", scale=1)
+                                    sc_audios.append(aud)
+                                    sc_retries.append(btn)
+                        
+                        (
+                            sc_audio1, sc_audio2, sc_audio3, sc_audio4, sc_audio5,
+                            sc_audio6, sc_audio7, sc_audio8, sc_audio9, sc_audio10
+                        ) = sc_audios
+                        (
+                            sc_retry1, sc_retry2, sc_retry3, sc_retry4, sc_retry5,
+                            sc_retry6, sc_retry7, sc_retry8, sc_retry9, sc_retry10
+                        ) = sc_retries
                         
                         sc_zip = gr.File(label="Download All WAVs (ZIP) / Tải xuống tất cả các tệp (ZIP)")
                         sc_parsed_markdown = gr.Markdown(label="Parsed Script Summary / Tóm tắt kịch bản đã phân tích")
                         sc_status = gr.Textbox(label="Status & Live Logs / Tiến trình trực tiếp", lines=5)
+
+                PAGE_SIZE = 10
 
                 def _generate_segments_core(
                     lang, source_type, saved_prof, ref_audio, ref_text, script_text,
@@ -1830,14 +1834,14 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
 
                 def _render_script_page(page_idx, segments, all_cache, temp_dir, zip_path, status_text=""):
                     N = len(segments)
-                    P = max(1, (N + 4) // 5)
+                    P = max(1, (N + PAGE_SIZE - 1) // PAGE_SIZE)
                     page_idx = max(0, min(page_idx, P - 1))
 
-                    start_idx = page_idx * 5
-                    end_idx = min(start_idx + 5, N)
+                    start_idx = page_idx * PAGE_SIZE
+                    end_idx = min(start_idx + PAGE_SIZE, N)
 
                     audio_updates = []
-                    for slot in range(5):
+                    for slot in range(PAGE_SIZE):
                         actual_idx = start_idx + slot
                         if actual_idx < N:
                             seg = segments[actual_idx]
@@ -1865,7 +1869,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                             zip_path = z
 
                     return (
-                        audio_updates[0], audio_updates[1], audio_updates[2], audio_updates[3], audio_updates[4],
+                        *audio_updates,
                         zip_path, parsed_summary, status_text, page_info_md,
                         page_idx, all_cache, temp_dir
                     )
@@ -1875,8 +1879,8 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                     if not segments:
                         yield _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
                         return
-                    start_idx = page_idx * 5
-                    target_indices = list(range(start_idx, min(start_idx + 5, len(segments))))
+                    start_idx = page_idx * PAGE_SIZE
+                    target_indices = list(range(start_idx, min(start_idx + PAGE_SIZE, len(segments))))
                     for res in _generate_segments_core(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, target_indices, page_idx, all_cache, temp_dir, progress):
                         yield res
 
@@ -1886,10 +1890,10 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                         yield _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
                         return
                     N = len(segments)
-                    P = max(1, (N + 4) // 5)
+                    P = max(1, (N + PAGE_SIZE - 1) // PAGE_SIZE)
                     next_page = min(page_idx + 1, P - 1)
-                    start_idx = next_page * 5
-                    target_indices = list(range(start_idx, min(start_idx + 5, N)))
+                    start_idx = next_page * PAGE_SIZE
+                    target_indices = list(range(start_idx, min(start_idx + PAGE_SIZE, N)))
                     for res in _generate_segments_core(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, target_indices, next_page, all_cache, temp_dir, progress):
                         yield res
 
@@ -1904,7 +1908,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
 
                 def _on_retry_single(slot_idx, lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, page_idx, all_cache, temp_dir, progress=gr.Progress()):
                     segments = parse_script(script_text) if script_text else []
-                    actual_idx = page_idx * 5 + slot_idx
+                    actual_idx = page_idx * PAGE_SIZE + slot_idx
                     if not segments or actual_idx >= len(segments):
                         yield _render_script_page(page_idx, segments, all_cache or {}, temp_dir or "", None, f"Phân đoạn {actual_idx + 1} không tồn tại.")
                         return
@@ -1919,7 +1923,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                 def _on_next_view(script_text, page_idx, all_cache, temp_dir):
                     segments = parse_script(script_text) if script_text else []
                     N = len(segments)
-                    P = max(1, (N + 4) // 5)
+                    P = max(1, (N + PAGE_SIZE - 1) // PAGE_SIZE)
                     new_page = min(page_idx + 1, P - 1)
                     return _render_script_page(new_page, segments, all_cache or {}, temp_dir, None, f"Đang xem trang {new_page + 1}")
 
@@ -1929,7 +1933,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                     sc_page_state, sc_cache_state, sc_temp_dir_state
                 ]
                 gen_outputs = [
-                    sc_audio1, sc_audio2, sc_audio3, sc_audio4, sc_audio5,
+                    *sc_audios,
                     sc_zip, sc_parsed_markdown, sc_status, sc_page_info,
                     sc_page_state, sc_cache_state, sc_temp_dir_state
                 ]
@@ -1938,11 +1942,8 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                 sc_next_btn.click(_on_continue_next, inputs=gen_inputs, outputs=gen_outputs)
                 sc_all_btn.click(_on_generate_all, inputs=gen_inputs, outputs=gen_outputs)
 
-                sc_retry1.click(lambda *args: _on_retry_single(0, *args), inputs=gen_inputs, outputs=gen_outputs)
-                sc_retry2.click(lambda *args: _on_retry_single(1, *args), inputs=gen_inputs, outputs=gen_outputs)
-                sc_retry3.click(lambda *args: _on_retry_single(2, *args), inputs=gen_inputs, outputs=gen_outputs)
-                sc_retry4.click(lambda *args: _on_retry_single(3, *args), inputs=gen_inputs, outputs=gen_outputs)
-                sc_retry5.click(lambda *args: _on_retry_single(4, *args), inputs=gen_inputs, outputs=gen_outputs)
+                for slot_i, btn in enumerate(sc_retries):
+                    btn.click(lambda *args, s=slot_i: _on_retry_single(s, *args), inputs=gen_inputs, outputs=gen_outputs)
 
                 sc_prev_view_btn.click(
                     _on_prev_view,
