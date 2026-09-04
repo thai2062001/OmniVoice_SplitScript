@@ -10,11 +10,22 @@ def _get_storage_dirs():
     """
     Detects if running on Google Colab with Google Drive mounted.
     Returns (saved_voices_dir, outputs_dir, is_gdrive).
+    Also configures HF_HOME and TORCH_HOME to permanently cache model weights on Drive.
     """
     gdrive_base = "/content/drive/MyDrive/OmniVoice_Studio"
     if os.path.exists("/content/drive/MyDrive"):
         voices_dir = os.path.join(gdrive_base, "saved_voices")
         out_dir = os.path.join(gdrive_base, "outputs")
+        hf_cache_dir = os.path.join(gdrive_base, "hf_cache")
+        torch_cache_dir = os.path.join(gdrive_base, "torch_cache")
+        
+        # Persist model weights on Google Drive so they don't need re-downloading on every Colab restart
+        os.environ.setdefault("HF_HOME", hf_cache_dir)
+        os.environ.setdefault("TORCH_HOME", torch_cache_dir)
+        os.environ.setdefault("HUGGINGFACE_HUB_CACHE", hf_cache_dir)
+        
+        os.makedirs(hf_cache_dir, exist_ok=True)
+        os.makedirs(torch_cache_dir, exist_ok=True)
         is_gdrive = True
     else:
         # Fallback to local workspace
@@ -253,3 +264,20 @@ def get_theme_and_css():
     }
     """
     return theme, css
+
+
+def get_head_js() -> str:
+    """Returns Client-side Keep-Alive JavaScript snippet for preventing Colab idle disconnections."""
+    return """
+    <script>
+    (function() {
+        console.log("⚡ OmniVoice Colab Keep-Alive Active.");
+        setInterval(function() {
+            try {
+                // Heartbeat ping to keep browser session & tunnel websocket alive
+                fetch(window.location.href, { method: 'HEAD', mode: 'no-cors', cache: 'no-store' }).catch(function(){});
+            } catch(e) {}
+        }, 45000);
+    })();
+    </script>
+    """

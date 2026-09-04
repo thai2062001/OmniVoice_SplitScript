@@ -1,7 +1,9 @@
 import os
+import time
 import tempfile
 import zipfile
 import gradio as gr
+import torch
 from omnivoice.webui.config import _IS_GDRIVE, _OUTPUTS_DIR
 from omnivoice.webui.profile_manager import list_voice_profiles, get_voice_profile_preview, load_voice_profile
 from omnivoice.webui.components import create_lang_dropdown, create_gen_settings
@@ -289,6 +291,8 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
             mode = "clone" if (prompt is not None or (ref_audio and str(ref_audio).strip())) else "design"
             statuses = []
             total_targets = len(target_indices)
+            start_batch_time = time.time()
+            elapsed_times = []
 
             for step_i, idx in enumerate(target_indices):
                 if idx >= len(segments):
@@ -313,12 +317,29 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                     if idx in all_cache and all_cache[idx][0] is not None:
                         continue
 
+                # Calculate ETA & VRAM monitor
+                remaining_targets = total_targets - step_i
+                if elapsed_times:
+                    avg_time = sum(elapsed_times) / len(elapsed_times)
+                    eta_seconds = int(avg_time * remaining_targets)
+                    mins, secs = divmod(eta_seconds, 60)
+                    eta_str = f" | ⏳ Còn ~{mins}m {secs}s"
+                else:
+                    eta_str = " | ⏳ Đang tính ETA..."
+
+                vram_str = ""
+                if torch.cuda.is_available():
+                    alloc_gb = torch.cuda.memory_allocated() / (1024 ** 3)
+                    res_gb = torch.cuda.memory_reserved() / (1024 ** 3)
+                    vram_str = f" | ⚡ VRAM: {alloc_gb:.1f}GB/{res_gb:.1f}GB"
+
                 # Show current progress and exact text being generated
                 progress(
                     (step_i) / max(1, total_targets),
-                    desc=f"[{step_i + 1}/{total_targets}] Đang sinh Segment #{seg_id}: {text[:35]}..."
+                    desc=f"[{step_i + 1}/{total_targets}]{eta_str}{vram_str} - #{seg_id}: {text[:28]}..."
                 )
 
+                t_seg_start = time.time()
                 try:
                     res, stat = _gen(
                         text,
@@ -336,8 +357,11 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                         ref_text or None,
                         prompt,
                     )
+                    t_seg_elapsed = time.time() - t_seg_start
+                    elapsed_times.append(t_seg_elapsed)
+
                     all_cache[idx] = (res, stat)
-                    statuses.append(f"Segment #{seg_id} [Thành công]: {stat}")
+                    statuses.append(f"Segment #{seg_id} [Thành công - {t_seg_elapsed:.1f}s]: {stat}")
 
                     if res and res[1] is not None:
                         import soundfile as sf
@@ -365,7 +389,8 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                 yield _render_script_page(current_page, segments, all_cache, temp_dir, zip_path, "\n".join(statuses))
 
             _clean_gpu_memory()
-            progress(1.0, desc="Hoàn tất sinh giọng!")
+            total_duration = time.time() - start_batch_time
+            progress(1.0, desc=f"Hoàn tất! Tổng thời gian: {total_duration:.1f}s")
             yield _render_script_page(current_page, segments, all_cache, temp_dir, zip_path, "\n".join(statuses))
 
         def _render_script_page(page_idx, segments, all_cache, temp_dir, zip_path, status_text=""):

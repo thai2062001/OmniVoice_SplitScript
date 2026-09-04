@@ -1,14 +1,16 @@
-import argparse
-import logging
 import os
-from typing import Any, Dict
+import logging
+import argparse
+import subprocess
+import threading
+import re
+import urllib.request
 import gradio as gr
-import numpy as np
 import torch
 
 from omnivoice import OmniVoice, OmniVoiceGenerationConfig
 from omnivoice.utils.common import get_best_device
-from omnivoice.webui.config import get_theme_and_css, _IS_GDRIVE
+from omnivoice.webui.config import get_theme_and_css, get_head_js, _IS_GDRIVE
 from omnivoice.webui.profile_manager import (
     list_voice_profiles,
     get_voice_profile_preview,
@@ -22,6 +24,52 @@ from omnivoice.webui.tabs.tab_batch_clone import build_batch_clone_tab
 from omnivoice.webui.tabs.tab_script_clone import build_script_clone_tab
 from omnivoice.webui.tabs.tab_voice_design import build_voice_design_tab
 from omnivoice.webui.tabs.tab_audio_merger import build_audio_merger_tab
+
+
+def start_cloudflare_tunnel(port: int):
+    """Starts a Cloudflare Quick Tunnel in the background and prints the high-speed public URL."""
+    import platform
+    import shutil
+
+    cf_bin = shutil.which("cloudflared")
+    if not cf_bin:
+        # Download cloudflared if running on Linux (Colab)
+        if platform.system().lower() == "linux":
+            try:
+                logging.info("Downloading cloudflared binary for Linux/Colab...")
+                urllib.request.urlretrieve(
+                    "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64",
+                    "/tmp/cloudflared"
+                )
+                os.chmod("/tmp/cloudflared", 0o777)
+                cf_bin = "/tmp/cloudflared"
+            except Exception as e:
+                logging.warning(f"Could not auto-download cloudflared: {e}")
+                return None
+        else:
+            return None
+
+    try:
+        cmd = [cf_bin, "tunnel", "--url", f"http://127.0.0.1:{port}"]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
+        
+        def _monitor_tunnel():
+            cf_url = None
+            for line in proc.stderr:
+                match = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", line)
+                if match and not cf_url:
+                    cf_url = match.group(0)
+                    print("\n" + "=" * 62)
+                    print("🌐 CLOUDFLARE HIGH-SPEED PUBLIC TUNNEL READY:")
+                    print(f"👉 {cf_url}")
+                    print("=" * 62 + "\n")
+        
+        t = threading.Thread(target=_monitor_tunnel, daemon=True)
+        t.start()
+        return proc
+    except Exception as e:
+        logging.warning(f"Failed to start Cloudflare tunnel: {e}")
+        return None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -49,7 +97,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Root path for reverse proxy.",
     )
     parser.add_argument(
-        "--share", action="store_true", default=False, help="Create public link."
+        "--share", action="store_true", default=False, help="Create Gradio public link."
+    )
+    parser.add_argument(
+        "--tunnel",
+        default="gradio",
+        choices=["gradio", "cloudflare", "none"],
+        help="Public tunnel provider (gradio, cloudflare, none). Default: gradio.",
     )
     parser.add_argument(
         "--no-asr",
@@ -139,9 +193,10 @@ def build_demo(
     _gen = generate_fn if generate_fn is not None else _gen_core
 
     theme, css = get_theme_and_css()
+    head_js = get_head_js()
     storage_badge = "☁️ <b>Lưu trữ: Google Drive</b> <i>(/content/drive/MyDrive/OmniVoice_Studio)</i>" if _IS_GDRIVE else "💻 <b>Lưu trữ: Cục bộ (Local)</b>"
 
-    with gr.Blocks(theme=theme, css=css, title="OmniVoice Studio") as demo:
+    with gr.Blocks(theme=theme, css=css, head=head_js, title="OmniVoice Studio") as demo:
         with gr.Row(elem_classes="app-header"):
             with gr.Column():
                 gr.Markdown(
@@ -291,10 +346,20 @@ def main(argv=None) -> int:
 
     demo = build_demo(model, checkpoint)
 
+    # Tunnel & Share logic
+    should_share = args.share
+    if args.tunnel == "cloudflare":
+        start_cloudflare_tunnel(args.port)
+        should_share = False
+    elif args.tunnel == "gradio":
+        should_share = True
+    elif args.tunnel == "none":
+        should_share = False
+
     demo.queue().launch(
         server_name=args.ip,
         server_port=args.port,
-        share=args.share,
+        share=should_share,
         root_path=args.root_path,
     )
     return 0
