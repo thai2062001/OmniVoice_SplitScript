@@ -610,8 +610,14 @@ Welcome to the hilarious survival drama of an unexpected offline world!""",
         sc_next_btn.click(_on_continue_next, inputs=gen_inputs, outputs=gen_outputs)
         sc_all_btn.click(_on_generate_all, inputs=gen_inputs, outputs=gen_outputs)
 
+        def _make_retry_handler(s_idx):
+            def _handler(*args):
+                for out in _on_retry_single(s_idx, *args):
+                    yield out
+            return _handler
+
         for slot_i, btn in enumerate(sc_retries):
-            btn.click(lambda *args, s=slot_i: _on_retry_single(s, *args), inputs=gen_inputs, outputs=gen_outputs)
+            btn.click(_make_retry_handler(slot_i), inputs=gen_inputs, outputs=gen_outputs)
 
         sc_prev_view_btn.click(
             _on_prev_view,
