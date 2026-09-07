@@ -129,7 +129,7 @@ def process_audio_merger(mode, folder_path, uploaded_files, gap_sec, progress=gr
     input_paths = []
     valid_exts = (".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac")
 
-    if mode == "Quét thư mục cục bộ (Local Folder)":
+    if "Quét thư mục cục bộ" in (mode or ""):
         clean_folder = (folder_path or "").strip().strip('"').strip("'")
         if not clean_folder:
             return "❌ Lỗi: Vui lòng nhập đường dẫn thư mục chứa audio.", None, None

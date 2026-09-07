@@ -362,6 +362,7 @@ Welcome to the hilarious survival drama of an unexpected offline world!""",
                         audio_path=ref_audio,
                         ref_txt=ref_text,
                     )
+                    actual_ref_audio = None
                 except Exception as e:
                     yield _render_script_page(current_page, segments, all_cache, temp_dir, None, None, f"❌ Lỗi trích xuất audio mẫu: {e}")
                     return

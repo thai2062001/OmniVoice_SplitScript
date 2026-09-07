@@ -65,7 +65,7 @@ def build_audio_merger_tab():
                     )
 
         def _toggle_am_mode(choice):
-            if choice == "Quét thư mục cục bộ (Local Folder)":
+            if "Quét thư mục cục bộ" in choice:
                 return gr.update(visible=True), gr.update(visible=False)
             else:
                 return gr.update(visible=False), gr.update(visible=True)

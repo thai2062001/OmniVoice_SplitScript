@@ -122,64 +122,76 @@ def build_batch_clone_tab(model, _gen):
             text3,
             text4,
             text5,
-            instruct, ns, gs, dn, sp, du, pp, po
+            instruct, ns, gs, dn, sp, du, pp, po,
+            progress=gr.Progress()
         ):
-            results = []
+            results = [None, None, None, None, None]
             statuses = []
             
             prompt = None
             actual_ref_audio = ref_audio
             if "Hồ sơ giọng có sẵn" in source_type:
                 if not saved_prof:
-                    return None, None, None, None, None, "❌ Lỗi: Vui lòng chọn một hồ sơ giọng đã lưu từ danh sách."
+                    yield None, None, None, None, None, "❌ Lỗi: Vui lòng chọn một hồ sơ giọng đã lưu từ danh sách."
+                    return
                 prompt, _ = load_voice_profile(saved_prof)
                 actual_ref_audio = None
                 if prompt is None:
-                    return None, None, None, None, None, f"❌ Lỗi: Không tìm thấy hồ sơ {saved_prof}.pt"
+                    yield None, None, None, None, None, f"❌ Lỗi: Không tìm thấy hồ sơ {saved_prof}.pt"
+                    return
             elif ref_audio:
                 try:
+                    progress(0.05, desc="Đang trích xuất đặc trưng âm thanh mẫu...")
                     from omnivoice.webui.audio_engine import extract_voice_prompt_safely
                     prompt, actual_ref_text = extract_voice_prompt_safely(
                         model=model,
                         audio_path=ref_audio,
                         ref_txt=ref_text,
                     )
+                    actual_ref_audio = None
                 except Exception as e:
-                    return None, None, None, None, None, f"❌ Lỗi trích xuất audio mẫu: {e}"
+                    yield None, None, None, None, None, f"❌ Lỗi trích xuất audio mẫu: {e}"
+                    return
             else:
-                return None, None, None, None, None, "❌ Lỗi: Vui lòng chọn hồ sơ giọng có sẵn hoặc tải lên file âm thanh mẫu."
+                yield None, None, None, None, None, "❌ Lỗi: Vui lòng chọn hồ sơ giọng có sẵn hoặc tải lên file âm thanh mẫu."
+                return
             
             texts = [text1, text2, text3, text4, text5]
+            valid_texts = [(i, t) for i, t in enumerate(texts) if t and t.strip()]
             
-            for i, t in enumerate(texts, 1):
-                if t and t.strip():
-                    try:
-                        res, stat = _gen(
-                            t.strip(),
-                            lang,
-                            actual_ref_audio,
-                            instruct,
-                            ns,
-                            gs,
-                            dn,
-                            sp,
-                            du,
-                            pp,
-                            po,
-                            mode="clone",
-                            ref_text=ref_text or None,
-                            voice_clone_prompt=prompt,
-                        )
-                        results.append(res)
-                        statuses.append(f"Voice {i}: {stat}")
-                    except Exception as e:
-                        results.append(None)
-                        statuses.append(f"Voice {i}: Error: {e}")
-                else:
-                    results.append(None)
-                    statuses.append(f"Voice {i}: Skipped (empty text)")
-                    
-            return results[0], results[1], results[2], results[3], results[4], "\n".join(statuses)
+            if not valid_texts:
+                yield None, None, None, None, None, "❌ Lỗi: Vui lòng nhập nội dung cho ít nhất 1 câu."
+                return
+
+            for step, (i, t) in enumerate(valid_texts, 1):
+                progress((step - 1) / len(valid_texts), desc=f"Đang tạo câu {i + 1}/{len(texts)}: {t[:25]}...")
+                try:
+                    res, stat = _gen(
+                        t.strip(),
+                        lang,
+                        actual_ref_audio,
+                        instruct,
+                        ns,
+                        gs,
+                        dn,
+                        sp,
+                        du,
+                        pp,
+                        po,
+                        mode="clone",
+                        ref_text=ref_text or None,
+                        voice_clone_prompt=prompt,
+                    )
+                    results[i] = res
+                    statuses.append(f"Câu {i + 1}: {stat}")
+                except Exception as e:
+                    results[i] = None
+                    statuses.append(f"Câu {i + 1}: Lỗi: {e}")
+                
+                yield results[0], results[1], results[2], results[3], results[4], "\n".join(statuses)
+                
+            progress(1.0, desc="Hoàn thành!")
+            yield results[0], results[1], results[2], results[3], results[4], "\n".join(statuses)
 
         bvc_btn.click(
             _batch_clone_fn,
