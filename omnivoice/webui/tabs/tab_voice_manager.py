@@ -30,12 +30,12 @@ def format_voice_info(name):
 
 def build_voice_manager_tab(model, _gen):
     """Constructs the Voice Manager Tab UI and internal event listeners."""
-    with gr.TabItem("🎙️ Quản Lý Hồ Sơ Giọng (Voice Manager)"):
+    with gr.TabItem("🎙️ Quản Lý Hồ Sơ Giọng"):
         gr.Markdown(
             """
 <div style="margin-bottom: 12px;">
   <h2 style="margin: 0 0 4px 0; font-size: 20px; font-weight: 700;">🎙️ Quản Lý & Lưu Trữ Hồ Sơ Giọng Mẫu (.pt)</h2>
-  <p style="margin: 0; color: #71717a; font-size: 14px;">Trích xuất đặc trưng giọng nói từ đoạn ghi âm <b>3–10 giây</b> và lưu cố định. Giúp bạn sử dụng lại ngay lập tức ở tất cả các tab khác mà <b>không cần upload lại audio</b>.</p>
+  <p style="margin: 0; color: #71717a; font-size: 14px;">Trích xuất đặc trưng giọng nói từ đoạn ghi âm <b>3–10 giây</b> và lưu cố định. Giúp bạn sử dụng lại ngay lập tức ở tất cả các tab khác mà <b>không cần tải lại audio mẫu</b>.</p>
 </div>
 """
         )
@@ -91,12 +91,12 @@ def build_voice_manager_tab(model, _gen):
                     with gr.Accordion("▶ Đọc thử nghiệm câu bất kỳ với giọng này", open=True):
                         with gr.Row():
                             vm_test_text = gr.Textbox(
-                                label="Văn bản test",
+                                label="Văn bản đọc thử",
                                 value="Xin chào các bạn, đây là giọng đọc thử nghiệm từ hồ sơ giọng đã lưu.",
                                 lines=2,
                                 scale=3
                             )
-                            vm_test_lang = create_lang_dropdown("Ngôn ngữ", "Auto")
+                            vm_test_lang = create_lang_dropdown("Ngôn ngữ đọc", "Tự động (Auto)")
                         vm_test_btn = gr.Button("▶ Tạo Giọng Đọc Thử", variant="secondary")
                         vm_test_audio = gr.Audio(label="🔊 Kết quả đọc thử", type="numpy")
 

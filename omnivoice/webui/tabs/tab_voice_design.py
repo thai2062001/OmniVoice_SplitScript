@@ -5,12 +5,12 @@ from omnivoice.webui.components import create_lang_dropdown, create_gen_settings
 
 def build_voice_design_tab(_gen):
     """Constructs the Voice Design Tab UI and internal event listeners."""
-    with gr.TabItem("🎨 Thiết Kế Giọng (Voice Design)"):
+    with gr.TabItem("🎨 Thiết Kế Giọng Nói"):
         gr.Markdown(
             """
 <div style="margin-bottom: 12px;">
-  <h2 style="margin: 0 0 4px 0; font-size: 20px; font-weight: 700;">🎨 Thiết Kế Giọng Nói AI Mới (Voice Design)</h2>
-  <p style="margin: 0; color: #71717a; font-size: 14px;">Tạo một giọng đọc hoàn toàn mới từ số 0 bằng cách phối hợp các đặc tính (Giới tính, Độ tuổi, Âm điệu, Phong cách, Accent) mà <b>không cần bất kỳ audio mẫu nào</b>.</p>
+  <h2 style="margin: 0 0 4px 0; font-size: 20px; font-weight: 700;">🎨 Thiết Kế Giọng Nói AI Hoàn Toàn Mới</h2>
+  <p style="margin: 0; color: #71717a; font-size: 14px;">Tạo một giọng đọc hoàn toàn mới từ số 0 bằng cách phối hợp các đặc tính (Giới tính, Độ tuổi, Âm điệu, Phong cách, Chất giọng) mà <b>không cần bất kỳ file âm thanh mẫu nào</b>.</p>
 </div>
 """
         )
@@ -24,7 +24,7 @@ def build_voice_design_tab(_gen):
                         lines=4,
                         placeholder="Nhập nội dung bạn muốn giọng AI thiết kế đọc vào đây...",
                     )
-                    vd_lang = create_lang_dropdown("Ngôn ngữ (Language)")
+                    vd_lang = create_lang_dropdown("Ngôn ngữ đọc")
 
                 with gr.Group(elem_classes="ux-card"):
                     gr.Markdown("### 🎭 Bước 2: Thiết Lập Đặc Tính Giọng Nói")

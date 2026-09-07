@@ -4,11 +4,11 @@ from omnivoice.webui.audio_engine import process_audio_merger
 
 def build_audio_merger_tab():
     """Constructs the Audio Merger Tab UI and internal event listeners."""
-    with gr.TabItem("🧩 Ghép Audio (Audio Merger)"):
+    with gr.TabItem("🧩 Ghép Nối Âm Thanh"):
         gr.Markdown(
             """
 <div style="margin-bottom: 12px;">
-  <h2 style="margin: 0 0 4px 0; font-size: 20px; font-weight: 700;">🧩 Ghép Nhiều File Audio Thành 1 Bản Thu Hoàn Chỉnh</h2>
+  <h2 style="margin: 0 0 4px 0; font-size: 20px; font-weight: 700;">🧩 Ghép Nhiều File Âm Thanh Thành 1 Bản Thu Hoàn Chỉnh</h2>
   <p style="margin: 0; color: #71717a; font-size: 14px;">Tự động nhận diện và sắp xếp thứ tự chính xác theo số tự nhiên trong tên file (vd: <code>seg_1.wav</code> ➔ <code>seg_2.wav</code> ➔ ... ➔ <code>seg_10.wav</code>). Hỗ trợ chèn khoảng lặng giữa các câu để giọng đọc tự nhiên.</p>
 </div>
 """
@@ -19,9 +19,9 @@ def build_audio_merger_tab():
                 with gr.Group(elem_classes="ux-card"):
                     gr.Markdown("### 📂 Bước 1: Chọn Nguồn File Âm Thanh")
                     am_mode = gr.Radio(
-                        label="Phương thức nạp audio",
-                        choices=["Quét thư mục cục bộ (Local Folder)", "Tải lên danh sách file trực tiếp"],
-                        value="Quét thư mục cục bộ (Local Folder)",
+                        label="Phương thức nạp âm thanh",
+                        choices=["Quét thư mục cục bộ", "Tải lên danh sách file trực tiếp"],
+                        value="Quét thư mục cục bộ",
                     )
                     am_folder = gr.Textbox(
                         label="Đường dẫn thư mục chứa audio",
@@ -30,7 +30,7 @@ def build_audio_merger_tab():
                         visible=True,
                     )
                     am_upload_files = gr.File(
-                        label="Kéo thả danh sách file Audio vào đây",
+                        label="Kéo thả danh sách file Âm thanh vào đây",
                         file_count="multiple",
                         file_types=["audio"],
                         visible=False,
@@ -44,7 +44,7 @@ def build_audio_merger_tab():
                         label="Khoảng lặng nghỉ giữa các câu (giây)",
                         info="Chèn khoảng im lặng tự nhiên giữa các phân đoạn (khuyên dùng: 0.2s – 0.5s).",
                     )
-                    am_merge_btn = gr.Button("🚀 Bắt Đầu Ghép Nối Audio", variant="primary", size="lg")
+                    am_merge_btn = gr.Button("🚀 Bắt Đầu Ghép Nối Âm Thanh", variant="primary", size="lg")
 
             # Right Card: Status & Output Audio
             with gr.Column(scale=1):
@@ -56,11 +56,11 @@ def build_audio_merger_tab():
                         placeholder="Danh sách và thứ tự các file sau khi sắp xếp tự nhiên sẽ xuất hiện tại đây...",
                     )
                     am_output_audio = gr.Audio(
-                        label="🔊 Audio Đã Ghép Hoàn Chỉnh",
+                        label="🔊 Bản Thu Đã Ghép Hoàn Chỉnh",
                         type="filepath",
                     )
                     am_download_audio = gr.File(
-                        label="💾 Tải File Audio Về Máy (.wav)",
+                        label="💾 Tải File Âm Thanh Về Máy (.wav)",
                         visible=True,
                     )
 

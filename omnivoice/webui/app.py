@@ -205,8 +205,8 @@ def build_demo(
             with gr.Column():
                 gr.Markdown(
                     f"""
-<h1 class="app-title">⚡ OmniVoice AI Studio</h1>
-<p class="app-subtitle">Nền tảng lồng tiếng & Clone Voice kịch bản chuyên nghiệp cho hơn 600+ ngôn ngữ &nbsp;|&nbsp; {storage_badge}</p>
+<h1 class="app-title">⚡ OmniVoice Studio - Nền Tảng Lồng Tiếng & Clone Voice AI</h1>
+<p class="app-subtitle">Hệ thống tạo giọng đọc, lồng tiếng kịch bản chuyên nghiệp & thiết kế giọng nói cho hơn 600+ ngôn ngữ &nbsp;|&nbsp; {storage_badge}</p>
 """
                 )
 

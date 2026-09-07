@@ -5,11 +5,11 @@ from omnivoice.webui.components import create_lang_dropdown, create_gen_settings
 
 def build_batch_clone_tab(model, _gen):
     """Constructs the Batch Voice Clone Tab UI and internal event listeners."""
-    with gr.TabItem("📑 Clone Hàng Loạt (Batch Clone)"):
+    with gr.TabItem("📑 Nhân Bản Hàng Loạt"):
         gr.Markdown(
             """
 <div style="margin-bottom: 12px;">
-  <h2 style="margin: 0 0 4px 0; font-size: 20px; font-weight: 700;">📑 Nhân Bản Giọng Nói Hàng Loạt (Batch Clone)</h2>
+  <h2 style="margin: 0 0 4px 0; font-size: 20px; font-weight: 700;">📑 Nhân Bản Giọng Nói Hàng Loạt (5 Câu)</h2>
   <p style="margin: 0; color: #71717a; font-size: 14px;">Tạo giọng đọc cùng lúc cho <b>5 câu văn bản riêng biệt</b> bằng chung 1 mẫu giọng đã chọn.</p>
 </div>
 """
@@ -67,12 +67,12 @@ def build_batch_clone_tab(model, _gen):
                         outputs=[bvc_preset_preview]
                     )
 
-                    bvc_lang = create_lang_dropdown("Ngôn ngữ giọng đọc (Language)")
+                    bvc_lang = create_lang_dropdown("Ngôn ngữ giọng đọc")
 
                 with gr.Group(elem_classes="ux-card"):
                     gr.Markdown("### ⚙️ Bước 2: Cài Đặt Nâng Cao Dùng Chung")
                     with gr.Accordion("Chỉ dẫn phong cách biểu cảm (Tùy chọn)", open=False):
-                        bvc_instruct = gr.Textbox(label="Chỉ dẫn biểu cảm (Instruct)", placeholder="Ví dụ: whisper, high pitch, low pitch...", lines=2)
+                        bvc_instruct = gr.Textbox(label="Chỉ dẫn biểu cảm (Cảm xúc / Phong cách)", placeholder="Ví dụ: whisper (thì thầm), high pitch (sôi nổi), low pitch (trầm ấm)...", lines=2)
                     (
                         bvc_ns,
                         bvc_gs,

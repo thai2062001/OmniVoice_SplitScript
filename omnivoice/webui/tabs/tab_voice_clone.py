@@ -5,12 +5,12 @@ from omnivoice.webui.components import create_lang_dropdown, create_gen_settings
 
 def build_voice_clone_tab(_gen):
     """Constructs the Voice Clone Tab UI and internal event listeners."""
-    with gr.TabItem("👤 Nhân Bản Giọng (Voice Clone)"):
+    with gr.TabItem("👤 Nhân Bản Giọng Nói"):
         gr.Markdown(
             """
 <div style="margin-bottom: 12px;">
-  <h2 style="margin: 0 0 4px 0; font-size: 20px; font-weight: 700;">👤 Nhân Bản Giọng Nói Đơn Lẻ (Voice Clone)</h2>
-  <p style="margin: 0; color: #71717a; font-size: 14px;">Mô phỏng chính xác chất giọng từ hồ sơ đã lưu hoặc file ghi âm ngắn (3-10s) và đọc bất kỳ văn bản nào.</p>
+  <h2 style="margin: 0 0 4px 0; font-size: 20px; font-weight: 700;">👤 Nhân Bản Giọng Nói Đơn Lẻ</h2>
+  <p style="margin: 0; color: #71717a; font-size: 14px;">Mô phỏng chính xác chất giọng từ hồ sơ đã lưu hoặc file ghi âm ngắn (3-10 giây) và đọc bất kỳ văn bản nào.</p>
 </div>
 """
         )
@@ -27,7 +27,7 @@ def build_voice_clone_tab(_gen):
                     with gr.Row():
                         vc_copy_btn = gr.Button("📋 Sao chép văn bản", size="sm", elem_classes="btn-copy-action", scale=1)
                         vc_char_count = gr.Markdown("📊 Số ký tự: **0** | Ước tính độ dài: **0s**", elem_classes="char-counter")
-                    vc_lang = create_lang_dropdown("Ngôn ngữ giọng đọc (Language)")
+                    vc_lang = create_lang_dropdown("Ngôn ngữ giọng đọc")
 
                     def _update_vc_char_counter(txt):
                         txt = txt or ""
@@ -102,10 +102,10 @@ def build_voice_clone_tab(_gen):
 
                 with gr.Group(elem_classes="ux-card"):
                     gr.Markdown("### ⚙️ Bước 3: Tùy Chỉnh Nâng Cao")
-                    with gr.Accordion("Chỉ dẫn phong cách / Cảm xúc (Tùy chọn)", open=False):
+                    with gr.Accordion("Chỉ dẫn phong cách biểu cảm (Tùy chọn)", open=False):
                         vc_instruct = gr.Textbox(
-                            label="Chỉ dẫn biểu cảm (Instruct)",
-                            placeholder="Ví dụ: whisper (thì thầm), high pitch (sôi nổi), low pitch (trầm ấm)...",
+                            label="Chỉ dẫn biểu cảm (Cảm xúc / Phong cách)",
+                            placeholder="Ví dụ: whisper (thì thầm), high pitch (sôi nổi, vui vẻ), low pitch (trầm ấm, nghiêm túc)...",
                             lines=2
                         )
                     (

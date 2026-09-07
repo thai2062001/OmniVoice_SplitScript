@@ -2,7 +2,7 @@ import gradio as gr
 from omnivoice.webui.config import _ALL_LANGUAGES
 
 
-def create_lang_dropdown(label="Ngôn ngữ (Language)", value="Auto"):
+def create_lang_dropdown(label="Ngôn ngữ đọc", value="Tự động (Auto)"):
     """Creates a reusable language selection dropdown."""
     return gr.Dropdown(
         label=label,
@@ -10,18 +10,18 @@ def create_lang_dropdown(label="Ngôn ngữ (Language)", value="Auto"):
         value=value,
         allow_custom_value=False,
         interactive=True,
-        info="Mặc định 'Auto' để tự động nhận diện ngôn ngữ.",
+        info="Chọn 'Tự động' để hệ thống tự nhận diện ngôn ngữ của câu.",
     )
 
 
 def create_gen_settings():
     """Creates a reusable Generation Settings accordion with Turbo Draft toggle."""
-    with gr.Accordion("⚙️ Cài đặt tạo giọng nâng cao (Generation Settings)", open=False):
+    with gr.Accordion("⚙️ Cài đặt tạo giọng nâng cao", open=False):
         with gr.Row():
             turbo_draft = gr.Checkbox(
-                label="⚡ Chế độ nháp siêu tốc (Turbo Draft - 16 bước)",
+                label="⚡ Chế độ nháp siêu tốc (16 bước)",
                 value=False,
-                info="Bật để nghe thử nhanh nhịp điệu/cảm xúc kịch bản với tốc độ nhanh nhất (16 steps).",
+                info="Bật để nghe thử nhanh nhịp điệu và cảm xúc kịch bản với tốc độ nhanh nhất (16 bước).",
             )
         with gr.Row():
             sp = gr.Slider(
@@ -29,8 +29,8 @@ def create_gen_settings():
                 1.5,
                 value=1.0,
                 step=0.05,
-                label="Tốc độ nói (Speed)",
-                info="1.0 = chuẩn. >1 nói nhanh hơn, <1 nói chậm hơn.",
+                label="Tốc độ đọc",
+                info="1.0 = chuẩn. >1 đọc nhanh hơn, <1 đọc chậm hơn.",
                 scale=1
             )
             du = gr.Number(
@@ -45,8 +45,8 @@ def create_gen_settings():
                 64,
                 value=24,
                 step=1,
-                label="Số bước khử nhiễu (Inference Steps)",
-                info="Mặc định: 24 (Tối ưu tốc độ & chất lượng trên GPU Colab/T4).",
+                label="Số bước khử nhiễu",
+                info="Mặc định: 24 (Tối ưu độ tự nhiên & tốc độ trên GPU Colab/T4).",
                 scale=1
             )
             gs = gr.Slider(
@@ -54,25 +54,25 @@ def create_gen_settings():
                 4.0,
                 value=2.0,
                 step=0.1,
-                label="Độ bám sát chỉ dẫn (Guidance Scale / CFG)",
-                info="Mặc định: 2.0.",
+                label="Độ bám sát chỉ dẫn biểu cảm",
+                info="Mặc định: 2.0 (Mức độ tuân thủ cảm xúc và phong cách).",
                 scale=1
             )
         with gr.Row():
             dn = gr.Checkbox(
-                label="Khử nhiễu nền (Denoise)",
+                label="Khử nhiễu âm thanh nền",
                 value=True,
-                info="Bật để lọc bớt tạp âm nền.",
+                info="Bật để lọc bớt tạp âm nền và làm trong giọng.",
             )
             pp = gr.Checkbox(
-                label="Tiền xử lý mẫu giọng (Preprocess Prompt)",
+                label="Tiền xử lý mẫu giọng",
                 value=True,
-                info="Tự động cắt khoảng lặng ở giọng mẫu.",
+                info="Tự động cắt tỉa khoảng lặng thừa ở audio mẫu.",
             )
             po = gr.Checkbox(
-                label="Hậu xử lý kết quả (Postprocess Output)",
+                label="Hậu xử lý âm thanh đầu ra",
                 value=True,
-                info="Xóa bỏ khoảng lặng thừa ở cuối file audio sinh ra.",
+                info="Tự động làm sạch và xóa khoảng lặng thừa ở cuối câu.",
             )
 
         turbo_draft.change(

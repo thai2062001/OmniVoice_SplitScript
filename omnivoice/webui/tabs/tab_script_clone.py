@@ -15,7 +15,7 @@ PAGE_SIZE = 10
 
 def build_script_clone_tab(model, _gen):
     """Constructs the Script Clone Tab UI and internal event listeners with modern UX."""
-    with gr.TabItem("🎬 Sinh Giọng Kịch Bản (Script Clone)"):
+    with gr.TabItem("🎬 Sinh Giọng Kịch Bản"):
         sc_page_state = gr.State(value=0)
         sc_cache_state = gr.State(value={})
         sc_temp_dir_state = gr.State(value="")
@@ -23,8 +23,8 @@ def build_script_clone_tab(model, _gen):
         gr.Markdown(
             """
 <div style="margin-bottom: 14px;">
-  <h2 style="margin: 0 0 4px 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em;">🎬 Sinh Giọng Theo Kịch Bản Dài (Script Clone)</h2>
-  <p style="margin: 0; color: #71717a; font-size: 14px; line-height: 1.5;">Tự động phân tích ngữ cảnh cảm xúc từng câu bằng Gemini AI, bóc tách phân đoạn linh hoạt, sinh giọng theo đợt 10 câu kèm cơ chế tiếp tục tiến trình (Resume) và xuất file ghép hoàn chỉnh.</p>
+  <h2 style="margin: 0 0 4px 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em;">🎬 Sinh Giọng Theo Kịch Bản Dài</h2>
+  <p style="margin: 0; color: #71717a; font-size: 14px; line-height: 1.5;">Tự động phân tích ngữ cảnh cảm xúc từng câu bằng Gemini AI, bóc tách phân đoạn linh hoạt, sinh giọng theo đợt 10 câu kèm cơ chế tiếp tục tiến trình và xuất file ghép hoàn chỉnh.</p>
 </div>
 """
         )
@@ -82,7 +82,7 @@ def build_script_clone_tab(model, _gen):
                         outputs=[sc_preset_preview]
                     )
                     
-                    sc_lang = create_lang_dropdown("Ngôn ngữ kịch bản (Language)")
+                    sc_lang = create_lang_dropdown("Ngôn ngữ kịch bản")
 
                 with gr.Group(elem_classes="ux-card"):
                     gr.Markdown("### <span class='step-badge'>2</span> Soạn Thảo & Phân Tích Kịch Bản")
