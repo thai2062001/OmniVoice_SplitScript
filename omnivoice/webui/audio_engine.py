@@ -126,7 +126,12 @@ def process_audio_merger(mode, folder_path, uploaded_files, gap_sec, progress=gr
         for f in os.listdir(clean_folder):
             full_f = os.path.join(clean_folder, f)
             if os.path.isfile(full_f) and f.lower().endswith(valid_exts) and os.path.getsize(full_f) > 0:
-                input_paths.append(full_f)
+                # If folder is a script cache containing segment_ files, only pick segment_ files
+                if any(x.startswith("segment_") for x in os.listdir(clean_folder)):
+                    if f.startswith("segment_") and f.lower().endswith(".wav"):
+                        input_paths.append(full_f)
+                else:
+                    input_paths.append(full_f)
     else:
         if not uploaded_files:
             return "❌ Lỗi: Vui lòng tải lên ít nhất một file audio.", None, None

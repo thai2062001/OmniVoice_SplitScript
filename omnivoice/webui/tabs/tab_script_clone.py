@@ -8,7 +8,7 @@ from omnivoice.webui.config import _IS_GDRIVE, _OUTPUTS_DIR
 from omnivoice.webui.profile_manager import list_voice_profiles, get_voice_profile_preview, load_voice_profile
 from omnivoice.webui.components import create_lang_dropdown, create_gen_settings
 from omnivoice.webui.script_parser import parse_script, analyze_script_with_gemini
-from omnivoice.webui.audio_engine import _clean_gpu_memory, process_audio_merger
+from omnivoice.webui.audio_engine import _clean_gpu_memory, process_audio_merger, _natural_sort_key
 
 PAGE_SIZE = 10
 
@@ -456,6 +456,7 @@ Welcome to the hilarious survival drama of an unexpected offline world!""",
                 zip_path = None
                 wav_files = [os.path.join(temp_dir, f) for f in os.listdir(temp_dir) if f.startswith("segment_") and f.endswith(".wav")]
                 if wav_files:
+                    wav_files.sort(key=_natural_sort_key)
                     zip_path = os.path.join(temp_dir, "all_segments.zip")
                     with zipfile.ZipFile(zip_path, 'w') as zipf:
                         for wp in wav_files:
