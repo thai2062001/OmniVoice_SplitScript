@@ -354,11 +354,13 @@ Welcome to the hilarious survival drama of an unexpected offline world!""",
                 if prompt is None:
                     yield _render_script_page(current_page, segments, all_cache, temp_dir, None, None, f"❌ Lỗi: Không thể nạp hồ sơ giọng {saved_prof}.pt")
                     return
-            elif ref_audio and str(ref_audio).strip():
+            elif ref_audio:
                 try:
-                    prompt = model.create_voice_clone_prompt(
-                        ref_audio=ref_audio,
-                        ref_text=ref_text or None,
+                    from omnivoice.webui.audio_engine import extract_voice_prompt_safely
+                    prompt, actual_ref_text = extract_voice_prompt_safely(
+                        model=model,
+                        audio_path=ref_audio,
+                        ref_txt=ref_text,
                     )
                 except Exception as e:
                     yield _render_script_page(current_page, segments, all_cache, temp_dir, None, None, f"❌ Lỗi trích xuất audio mẫu: {e}")

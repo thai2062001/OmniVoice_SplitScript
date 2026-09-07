@@ -136,11 +136,13 @@ def build_batch_clone_tab(model, _gen):
                 actual_ref_audio = None
                 if prompt is None:
                     return None, None, None, None, None, f"❌ Lỗi: Không tìm thấy hồ sơ {saved_prof}.pt"
-            elif ref_audio and str(ref_audio).strip():
+            elif ref_audio:
                 try:
-                    prompt = model.create_voice_clone_prompt(
-                        ref_audio=ref_audio,
-                        ref_text=ref_text or None,
+                    from omnivoice.webui.audio_engine import extract_voice_prompt_safely
+                    prompt, actual_ref_text = extract_voice_prompt_safely(
+                        model=model,
+                        audio_path=ref_audio,
+                        ref_txt=ref_text,
                     )
                 except Exception as e:
                     return None, None, None, None, None, f"❌ Lỗi trích xuất audio mẫu: {e}"
