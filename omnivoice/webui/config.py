@@ -310,15 +310,15 @@ def get_theme_and_css():
     .segment-card {
         border: 1px solid #e4e4e7;
         border-radius: 12px;
-        padding: 14px 16px;
+        padding: 12px 14px;
         background: #ffffff;
-        margin-bottom: 10px;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        margin-bottom: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         transition: all 0.2s ease;
     }
     .segment-card:hover {
         border-color: #cbd5e1;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.06);
     }
     .dark .segment-card {
         border: 1px solid #27272a;
@@ -326,6 +326,39 @@ def get_theme_and_css():
     }
     .dark .segment-card:hover {
         border-color: #3f3f46;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+    }
+
+    /* Script Clone Header Info Badge */
+    .script-status-banner {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 10px 14px;
+        margin-bottom: 12px;
+        font-size: 13px;
+        color: #334155;
+    }
+    .dark .script-status-banner {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        border-color: #334155;
+        color: #e2e8f0;
+    }
+
+    /* Primary Accent Run Button */
+    .btn-generate-all {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+        color: #ffffff !important;
+        border: 1px solid #1e40af !important;
+        font-size: 15px !important;
+        font-weight: 700 !important;
+        padding: 10px 16px !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
+    }
+    .btn-generate-all:hover {
+        background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35) !important;
     }
 
     /* Step Badge Numbers */
@@ -333,18 +366,35 @@ def get_theme_and_css():
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 26px;
-        height: 26px;
+        width: 24px;
+        height: 24px;
         background: #18181b;
         color: #ffffff;
         border-radius: 50%;
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 700;
-        margin-right: 8px;
+        margin-right: 6px;
     }
     .dark .step-badge {
         background: #3b82f6;
         color: #ffffff;
+    }
+
+    /* Segment Status Tag */
+    .seg-badge-done {
+        display: inline-block;
+        background: #ecfdf5;
+        color: #059669;
+        border: 1px solid #a7f3d0;
+        border-radius: 6px;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    .dark .seg-badge-done {
+        background: #064e3b;
+        color: #6ee7b7;
+        border-color: #047857;
     }
 
     /* Character Counter styling */

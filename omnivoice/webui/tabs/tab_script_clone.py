@@ -8,13 +8,13 @@ from omnivoice.webui.config import _IS_GDRIVE, _OUTPUTS_DIR
 from omnivoice.webui.profile_manager import list_voice_profiles, get_voice_profile_preview, load_voice_profile
 from omnivoice.webui.components import create_lang_dropdown, create_gen_settings
 from omnivoice.webui.script_parser import parse_script, analyze_script_with_gemini
-from omnivoice.webui.audio_engine import _clean_gpu_memory
+from omnivoice.webui.audio_engine import _clean_gpu_memory, process_audio_merger
 
 PAGE_SIZE = 10
 
 
 def build_script_clone_tab(model, _gen):
-    """Constructs the Script Clone Tab UI and internal event listeners."""
+    """Constructs the Script Clone Tab UI and internal event listeners with modern UX."""
     with gr.TabItem("🎬 Sinh Giọng Kịch Bản (Script Clone)"):
         sc_page_state = gr.State(value=0)
         sc_cache_state = gr.State(value={})
@@ -22,22 +22,22 @@ def build_script_clone_tab(model, _gen):
 
         gr.Markdown(
             """
-<div style="margin-bottom: 12px;">
-  <h2 style="margin: 0 0 4px 0; font-size: 20px; font-weight: 700;">🎬 Sinh Giọng Theo Kịch Bản Dài (Script Clone)</h2>
-  <p style="margin: 0; color: #71717a; font-size: 14px;">Tự động phân tích ngữ cảnh cảm xúc từng câu bằng Gemini AI, sinh giọng theo đợt 10 câu, tiếp tục tiến trình không lo đứt đoạn và hỗ trợ thử lại từng câu.</p>
+<div style="margin-bottom: 14px;">
+  <h2 style="margin: 0 0 4px 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em;">🎬 Sinh Giọng Theo Kịch Bản Dài (Script Clone)</h2>
+  <p style="margin: 0; color: #71717a; font-size: 14px; line-height: 1.5;">Tự động phân tích ngữ cảnh cảm xúc từng câu bằng Gemini AI, bóc tách phân đoạn linh hoạt, sinh giọng theo đợt 10 câu kèm cơ chế tiếp tục tiến trình (Resume) và xuất file ghép hoàn chỉnh.</p>
 </div>
 """
         )
 
         with gr.Row():
-            # Left Column: Setup & Script Input
-            with gr.Column(scale=1):
+            # ================= Left Column: Setup, Script Editor & Action Controls =================
+            with gr.Column(scale=6):
                 with gr.Group(elem_classes="ux-card"):
-                    gr.Markdown("### 🎙️ Bước 1: Chọn Giọng Mẫu Đọc Kịch Bản")
+                    gr.Markdown("### <span class='step-badge'>1</span> Nguồn Giọng Đọc Mẫu")
                     sc_source_type = gr.Radio(
                         choices=["🎙️ Sử dụng Hồ sơ giọng có sẵn (.pt)", "📤 Tải lên Audio mẫu mới"],
                         value="🎙️ Sử dụng Hồ sơ giọng có sẵn (.pt)" if list_voice_profiles() else "📤 Tải lên Audio mẫu mới",
-                        label="Nguồn giọng đọc"
+                        label="Lựa chọn nguồn giọng"
                     )
 
                     with gr.Group(visible=bool(list_voice_profiles())) as sc_preset_group:
@@ -63,8 +63,8 @@ def build_script_clone_tab(model, _gen):
                             elem_classes="compact-audio",
                         )
                         sc_ref_text = gr.Textbox(
-                            label="Văn bản giọng mẫu (Tùy chọn)",
-                            placeholder="Để trống nếu muốn tự động nhận diện (ASR)...",
+                            label="Văn bản giọng mẫu (Tùy chọn - Tăng độ tương đồng)",
+                            placeholder="Để trống nếu muốn tự động nhận diện giọng nói (Whisper ASR)...",
                         )
 
                     def _on_sc_source_change(mode_choice):
@@ -82,14 +82,14 @@ def build_script_clone_tab(model, _gen):
                         outputs=[sc_preset_preview]
                     )
                     
-                    sc_lang = create_lang_dropdown("Ngôn ngữ giọng đọc (Language)")
+                    sc_lang = create_lang_dropdown("Ngôn ngữ kịch bản (Language)")
 
                 with gr.Group(elem_classes="ux-card"):
-                    gr.Markdown("### 📝 Bước 2: Nhập & Phân Tích Kịch Bản")
+                    gr.Markdown("### <span class='step-badge'>2</span> Soạn Thảo & Phân Tích Kịch Bản")
                     sc_script = gr.Textbox(
-                        label="Kịch bản phân đoạn (Script)",
-                        lines=10,
-                        placeholder="[#1] THỜI GIAN: 0.0 -> 5.0\nVĂN BẢN: Nội dung câu 1...\nCẢM XÚC: Hài hước\nHƯỚNG DẪN AI: High energy intro\n------------------------------------------",
+                        label="Nội dung kịch bản (Mỗi dòng 1 câu HOẶC Kịch bản chuẩn gắn tag)",
+                        lines=9,
+                        placeholder="Dán kịch bản vào đây (mỗi dòng là 1 câu)...\n\nHoặc định dạng timeline chuẩn:\n[#1] THỜI GIAN: 0.0 -> 5.0\nVĂN BẢN: Câu 1...\nCẢM XÚC: Hài hước\nHƯỚNG DẪN AI: High energy intro\n------------------------------------------",
                         value="""After clawing your way out of your automated smart-home trap, an even bigger disaster strikes your pockets: Apple Pay and credit cards instantly turn into worthless plastic junk!
 Picture yourself pulling into the Starbucks Drive-thru, ordering an iced oat milk caramel macchiato with extra cold foam for nine whole dollars.
 You casually flick your wrist, tapping your shiny Apple Watch against the contactless payment terminal, waiting for that sleek, reassuring digital "beep."
@@ -101,9 +101,15 @@ Over at local grocery supermarkets, pure retail comedy unfolds as cloud-based ba
 Cashiers dust off vintage Casio desktop calculators, manually typing in the price of every cereal box while squinting at tiny yellow price stickers on shelf edges.
 Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, while managers weigh vegetables on antique mechanical balance scales with swinging needles!"""
                     )
+
+                    # Script Toolbar
                     with gr.Row():
-                        sc_copy_btn = gr.Button("📋 Sao chép kịch bản", size="sm", elem_classes="btn-copy-action", scale=1)
-                        sc_stat_count = gr.Markdown("📊 **10** dòng | **184** từ | Tổng ký tự: **1248**", elem_classes="char-counter")
+                        sc_parse_now_btn = gr.Button("🔍 Phân Tích & Tách Câu Ngay", variant="primary", size="sm", scale=2)
+                        sc_copy_btn = gr.Button("📋 Sao chép", size="sm", elem_classes="btn-copy-action", scale=1)
+                        sc_clear_btn = gr.Button("🧹 Xóa trắng", size="sm", elem_classes="btn-copy-action", scale=1)
+                        sc_sample_btn = gr.Button("📝 Chèn mẫu", size="sm", elem_classes="btn-copy-action", scale=1)
+
+                    sc_stat_count = gr.Markdown("📊 **10** dòng | **184** từ | Tổng ký tự: **1248**", elem_classes="char-counter")
 
                     def _update_sc_stats(txt):
                         txt = txt or ""
@@ -118,11 +124,19 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                         outputs=None,
                         js="(txt) => { window.copyTextToClipboard(txt, '📋 Đã sao chép kịch bản vào bộ nhớ tạm!'); }"
                     )
+                    sc_clear_btn.click(lambda: "", outputs=[sc_script])
+                    sc_sample_btn.click(
+                        lambda: """Imagine waking up on a gorgeous Saturday morning with no internet anywhere.
+You reach for your phone, unlock the screen, and the loading circle spins indefinitely!
+Stepping outside, you find all your neighbors staring at blank phones in total disbelief.
+Welcome to the hilarious survival drama of an unexpected offline world!""",
+                        outputs=[sc_script]
+                    )
 
+                    # Import File Accordion
                     with gr.Accordion("📂 Nhập kịch bản từ file (.txt / .md)", open=False):
                         with gr.Row():
-                            sc_import_raw = gr.File(label="Import Kịch bản Raw (mỗi dòng 1 câu)", file_types=[".txt", ".md"], scale=1)
-                            sc_import_std = gr.File(label="Import Kịch bản Timeline Chuẩn", file_types=[".txt", ".md"], scale=1)
+                            sc_import_file = gr.File(label="Kéo thả file kịch bản (.txt, .md)", file_types=[".txt", ".md"], scale=1)
 
                     def _read_file_content(file_obj):
                         if not file_obj:
@@ -141,10 +155,10 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                             gr.Warning(f"Lỗi đọc file: {e}")
                             return gr.update()
 
-                    sc_import_raw.change(_read_file_content, inputs=[sc_import_raw], outputs=[sc_script])
-                    sc_import_std.change(_read_file_content, inputs=[sc_import_std], outputs=[sc_script])
+                    sc_import_file.change(_read_file_content, inputs=[sc_import_file], outputs=[sc_script])
 
-                    with gr.Accordion("🤖 Tự động phân tích cảm xúc kịch bản bằng Gemini AI", open=False):
+                    # Gemini AI Accordion
+                    with gr.Accordion("🤖 Tự động phân tích cảm xúc & nhịp điệu bằng Gemini AI", open=False):
                         with gr.Row():
                             gemini_api_key = gr.Textbox(
                                 label="Gemini API Key",
@@ -159,7 +173,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                                 value="gemini-2.5-flash",
                                 scale=1
                             )
-                        gemini_analyze_btn = gr.Button("✨ Phân Tích Cảm Xúc Ngữ Cảnh (Gemini Flash AI)", variant="secondary")
+                        gemini_analyze_btn = gr.Button("✨ Bắt Đầu Phân Tích Cảm Xúc (Gemini AI)", variant="secondary")
 
                     with gr.Group(visible=False) as gemini_preview_group:
                         gr.Markdown("#### 📋 Kết quả gợi ý cảm xúc từ Gemini AI:")
@@ -225,7 +239,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                         return gr.update(visible=False), "Đã hủy gợi ý của Gemini."
 
                 with gr.Group(elem_classes="ux-card"):
-                    gr.Markdown("### ⚙️ Bước 3: Cài Đặt Sinh Giọng & Điều Khiển")
+                    gr.Markdown("### <span class='step-badge'>3</span> Cài Đặt & Tiến Hành Sinh Giọng")
                     (
                         sc_ns,
                         sc_gs,
@@ -239,19 +253,21 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                     sc_resume = gr.Checkbox(
                         label="🔄 Tiếp tục tiến trình (Bỏ qua câu đã tạo thành công)",
                         value=True,
-                        info="Tự động giữ nguyên audio đã sinh trước đó, không tốn GPU render lại.",
+                        info="Tự động khôi phục audio câu đã sinh trước đó từ bộ nhớ đệm, không tốn GPU render lại.",
                     )
+                    
+                    sc_all_btn = gr.Button("⚡ Sinh TOÀN BỘ Kịch Bản", variant="primary", size="lg", elem_classes="btn-generate-all")
                     with gr.Row():
-                        sc_btn = gr.Button("▶ Sinh đợt này (10 câu)", variant="primary", scale=2)
-                        sc_next_btn = gr.Button("⏭ Đợt tiếp theo", variant="secondary", scale=1)
-                    sc_all_btn = gr.Button("⚡ Sinh TOÀN BỘ kịch bản", variant="primary", size="lg")
+                        sc_btn = gr.Button("▶ Sinh đợt này (10 câu)", variant="secondary", scale=2)
+                        sc_next_btn = gr.Button("⏭ Sang đợt sau & Sinh", variant="secondary", scale=1)
 
-            # Right Column: Segment Audio Players & Batch ZIP Download
-            with gr.Column(scale=1):
+            # ================= Right Column: Output Segments & Direct Merging =================
+            with gr.Column(scale=6):
                 with gr.Group(elem_classes="ux-card"):
                     with gr.Row():
                         sc_prev_view_btn = gr.Button("◀ Đợt trước", size="sm", scale=1)
-                        sc_page_info = gr.Markdown("### 📑 Đang xem: Phân đoạn 1 - 10", elem_classes="text-center")
+                        with gr.Column(scale=3):
+                            sc_page_info = gr.Markdown("### 📑 Đang xem: Phân đoạn 1 - 10", elem_classes="text-center")
                         sc_next_view_btn = gr.Button("Đợt sau ▶", size="sm", scale=1)
 
                     sc_audios = []
@@ -263,11 +279,32 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                                 btn = gr.Button("🔄 Thử lại", size="sm", scale=1)
                                 sc_audios.append(aud)
                                 sc_retries.append(btn)
-                    
-                    sc_zip = gr.File(label="💾 Tải về toàn bộ file âm thanh (.ZIP)")
-                    sc_parsed_markdown = gr.Markdown(label="Tóm tắt phân đoạn kịch bản")
-                    sc_status = gr.Textbox(label="Trạng thái & Tiến trình trực tiếp", lines=5)
 
+                    # Full Merge Audio & Download Center
+                    with gr.Accordion("🧩 Ghép & Xuất Bản Audio Hoàn Chỉnh", open=True):
+                        with gr.Row():
+                            sc_merge_gap = gr.Slider(
+                                minimum=0.0,
+                                maximum=2.0,
+                                value=0.3,
+                                step=0.1,
+                                label="Khoảng lặng nghỉ giữa các câu (giây)",
+                                scale=2
+                            )
+                            sc_merge_btn = gr.Button("🚀 Ghép Toàn Bộ Audio Thành 1 File", variant="primary", scale=2)
+                        
+                        sc_merged_audio = gr.Audio(label="🔊 Audio Đã Ghép Hoàn Chỉnh", type="filepath")
+
+                    with gr.Row():
+                        sc_zip = gr.File(label="💾 Tải về file nén tất cả câu lẻ (.ZIP)", scale=1)
+                        sc_merged_file = gr.File(label="💾 Tải về file Audio Ghép (.wav)", scale=1)
+
+                    with gr.Accordion("📋 Bảng Tóm Tắt Chi Tiết Phân Đoạn", open=False):
+                        sc_parsed_markdown = gr.Markdown(label="Tóm tắt phân đoạn kịch bản")
+
+                    sc_status = gr.Textbox(label="Trạng thái & Tiến trình trực tiếp", lines=4)
+
+        # ================= Backend Core Logic =================
         def _generate_segments_core(
             lang, source_type, saved_prof, ref_audio, ref_text, script_text,
             ns, gs, dn, sp, du, pp, po, resume_existing,
@@ -275,17 +312,17 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
             progress=gr.Progress()
         ):
             if not script_text or not script_text.strip():
-                yield _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
+                yield _render_script_page(0, [], {}, "", None, None, "Error: Script is empty.")
                 return
             
             try:
                 segments = parse_script(script_text)
             except Exception as e:
-                yield _render_script_page(current_page, [], all_cache or {}, temp_dir or "", None, f"Error parsing script: {e}")
+                yield _render_script_page(current_page, [], all_cache or {}, temp_dir or "", None, None, f"Error parsing script: {e}")
                 return
                 
             if not segments:
-                yield _render_script_page(current_page, [], all_cache or {}, temp_dir or "", None, "Error: No valid segments found.")
+                yield _render_script_page(current_page, [], all_cache or {}, temp_dir or "", None, None, "Error: No valid segments found.")
                 return
             
             if all_cache is None:
@@ -302,12 +339,12 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
             actual_ref_audio = ref_audio
             if "Hồ sơ giọng có sẵn" in source_type:
                 if not saved_prof:
-                    yield _render_script_page(current_page, segments, all_cache, temp_dir, None, "❌ Lỗi: Vui lòng chọn một hồ sơ giọng đã lưu từ danh sách.")
+                    yield _render_script_page(current_page, segments, all_cache, temp_dir, None, None, "❌ Lỗi: Vui lòng chọn một hồ sơ giọng đã lưu từ danh sách.")
                     return
                 prompt, _ = load_voice_profile(saved_prof)
                 actual_ref_audio = None
                 if prompt is None:
-                    yield _render_script_page(current_page, segments, all_cache, temp_dir, None, f"❌ Lỗi: Không thể nạp hồ sơ giọng {saved_prof}.pt")
+                    yield _render_script_page(current_page, segments, all_cache, temp_dir, None, None, f"❌ Lỗi: Không thể nạp hồ sơ giọng {saved_prof}.pt")
                     return
             elif ref_audio and str(ref_audio).strip():
                 try:
@@ -316,7 +353,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                         ref_text=ref_text or None,
                     )
                 except Exception as e:
-                    yield _render_script_page(current_page, segments, all_cache, temp_dir, None, f"❌ Lỗi trích xuất audio mẫu: {e}")
+                    yield _render_script_page(current_page, segments, all_cache, temp_dir, None, None, f"❌ Lỗi trích xuất audio mẫu: {e}")
                     return
             
             mode = "clone" if (prompt is not None or (ref_audio and str(ref_audio).strip())) else "design"
@@ -409,7 +446,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
 
                 # Update zip file with all generated wavs in temp_dir incrementally
                 zip_path = None
-                wav_files = [os.path.join(temp_dir, f) for f in os.listdir(temp_dir) if f.endswith(".wav")]
+                wav_files = [os.path.join(temp_dir, f) for f in os.listdir(temp_dir) if f.startswith("segment_") and f.endswith(".wav")]
                 if wav_files:
                     zip_path = os.path.join(temp_dir, "all_segments.zip")
                     with zipfile.ZipFile(zip_path, 'w') as zipf:
@@ -417,16 +454,16 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                             zipf.write(wp, os.path.basename(wp))
 
                 # Live yield update after EACH segment
-                yield _render_script_page(current_page, segments, all_cache, temp_dir, zip_path, "\n".join(statuses))
+                yield _render_script_page(current_page, segments, all_cache, temp_dir, zip_path, None, "\n".join(statuses))
 
             _clean_gpu_memory()
             total_duration = time.time() - start_batch_time
             progress(1.0, desc=f"Hoàn tất! Tổng thời gian: {total_duration:.1f}s")
-            yield _render_script_page(current_page, segments, all_cache, temp_dir, zip_path, "\n".join(statuses))
+            yield _render_script_page(current_page, segments, all_cache, temp_dir, zip_path, None, "\n".join(statuses))
 
-        def _render_script_page(page_idx, segments, all_cache, temp_dir, zip_path, status_text=""):
+        def _render_script_page(page_idx, segments, all_cache, temp_dir, zip_path=None, merged_audio_path=None, status_text=""):
             N = len(segments)
-            P = max(1, (N + PAGE_SIZE - 1) // PAGE_SIZE)
+            P = max(1, (N + PAGE_SIZE - 1) // PAGE_SIZE) if N > 0 else 1
             page_idx = max(0, min(page_idx, P - 1))
 
             start_idx = page_idx * PAGE_SIZE
@@ -439,21 +476,27 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
                     seg = segments[actual_idx]
                     cached = all_cache.get(actual_idx, (None, ""))
                     audio_val = cached[0]
-                    audio_label = f"Phân đoạn #{seg['id']} ({seg['duration']}s): {seg['text'][:25]}..."
+                    inst_label = f" [{seg['valid_instruct']}]" if seg.get("valid_instruct") else ""
+                    audio_label = f"Phân đoạn #{seg['id']} ({seg['duration']}s){inst_label}: {seg['text'][:32]}..."
                     audio_updates.append(gr.update(value=audio_val, label=audio_label, visible=True))
                 else:
                     audio_updates.append(gr.update(value=None, label="Trống", visible=False))
 
-            parsed_summary = "### Parsed Segments Summary:\n"
+            completed_count = sum(1 for k, v in (all_cache or {}).items() if v and v[0] is not None and k < N)
+            
+            parsed_summary = f"### 📊 Danh sách phân đoạn ({completed_count}/{N} đã hoàn thành):\n\n"
             for idx, seg in enumerate(segments):
                 is_current = (start_idx <= idx < end_idx)
                 prefix = "👉 " if is_current else "- "
-                done_icon = " ✅" if idx in all_cache and all_cache[idx][0] is not None else (" ❌ (Lỗi)" if idx in all_cache else "")
-                inst_display = f"*{seg['raw_instruct']}*" if seg['raw_instruct'] else ""
-                mapped_display = f" [`{seg['valid_instruct']}`]" if seg['valid_instruct'] else ""
-                parsed_summary += f"{prefix}**Segment #{seg['id']}** ({seg['duration']}s): {inst_display}{mapped_display} - \"{seg['text'][:30]}...\"{done_icon}\n"
+                done_icon = " ✅" if idx in all_cache and all_cache[idx][0] is not None else (" ❌ (Lỗi)" if idx in all_cache else " ⚪")
+                inst_display = f"*{seg['raw_instruct']}*" if seg.get('raw_instruct') else ""
+                mapped_display = f" [`{seg['valid_instruct']}`]" if seg.get('valid_instruct') else ""
+                parsed_summary += f"{prefix}**Segment #{seg['id']}** ({seg['duration']}s): {inst_display}{mapped_display} - \"{seg['text'][:35]}...\"{done_icon}\n"
 
-            page_info_md = f"### 📑 Đang xem: Phân đoạn {start_idx + 1} - {end_idx} / Tổng: {N} (Trang {page_idx + 1}/{P})"
+            if N > 0:
+                page_info_md = f"### 📑 Phân đoạn {start_idx + 1} - {end_idx} / Tổng: {N} (Trang {page_idx + 1}/{P}) | Đã xong: {completed_count}/{N}"
+            else:
+                page_info_md = "### 📑 Kịch bản chưa có phân đoạn nào"
 
             if not zip_path and temp_dir and os.path.exists(temp_dir):
                 z = os.path.join(temp_dir, "all_segments.zip")
@@ -462,14 +505,24 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
 
             return (
                 *audio_updates,
-                zip_path, parsed_summary, status_text, page_info_md,
+                zip_path, merged_audio_path, merged_audio_path, parsed_summary, status_text, page_info_md,
                 page_idx, all_cache, temp_dir
             )
+
+        # Trigger basic offline parsing without running audio generation
+        def _on_parse_only(script_text, page_idx, all_cache, temp_dir):
+            if not script_text or not script_text.strip():
+                return _render_script_page(0, [], all_cache or {}, temp_dir or "", None, None, "Kịch bản hiện tại đang trống.")
+            try:
+                segments = parse_script(script_text)
+                return _render_script_page(0, segments, all_cache or {}, temp_dir or "", None, None, f"✅ Đã phân tích thành công {len(segments)} phân đoạn kịch bản!")
+            except Exception as e:
+                return _render_script_page(0, [], all_cache or {}, temp_dir or "", None, None, f"Lỗi phân tích kịch bản: {e}")
 
         def _on_generate_current(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, resume_existing, page_idx, all_cache, temp_dir, progress=gr.Progress()):
             segments = parse_script(script_text) if script_text else []
             if not segments:
-                yield _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
+                yield _render_script_page(0, [], {}, "", None, None, "Error: Script is empty.")
                 return
             start_idx = page_idx * PAGE_SIZE
             target_indices = list(range(start_idx, min(start_idx + PAGE_SIZE, len(segments))))
@@ -479,7 +532,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
         def _on_continue_next(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, resume_existing, page_idx, all_cache, temp_dir, progress=gr.Progress()):
             segments = parse_script(script_text) if script_text else []
             if not segments:
-                yield _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
+                yield _render_script_page(0, [], {}, "", None, None, "Error: Script is empty.")
                 return
             N = len(segments)
             P = max(1, (N + PAGE_SIZE - 1) // PAGE_SIZE)
@@ -492,7 +545,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
         def _on_generate_all(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, resume_existing, page_idx, all_cache, temp_dir, progress=gr.Progress()):
             segments = parse_script(script_text) if script_text else []
             if not segments:
-                yield _render_script_page(0, [], {}, "", None, "Error: Script is empty.")
+                yield _render_script_page(0, [], {}, "", None, None, "Error: Script is empty.")
                 return
             target_indices = list(range(len(segments)))
             for res in _generate_segments_core(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, resume_existing, target_indices, page_idx, all_cache, temp_dir, progress):
@@ -502,7 +555,7 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
             segments = parse_script(script_text) if script_text else []
             actual_idx = page_idx * PAGE_SIZE + slot_idx
             if not segments or actual_idx >= len(segments):
-                yield _render_script_page(page_idx, segments, all_cache or {}, temp_dir or "", None, f"Phân đoạn {actual_idx + 1} không tồn tại.")
+                yield _render_script_page(page_idx, segments, all_cache or {}, temp_dir or "", None, None, f"Phân đoạn {actual_idx + 1} không tồn tại.")
                 return
             # Force resume_existing=False when explicitly retrying a specific segment
             for res in _generate_segments_core(lang, source_type, saved_prof, ref_audio, ref_text, script_text, ns, gs, dn, sp, du, pp, po, False, [actual_idx], page_idx, all_cache, temp_dir, progress):
@@ -511,14 +564,22 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
         def _on_prev_view(script_text, page_idx, all_cache, temp_dir):
             segments = parse_script(script_text) if script_text else []
             new_page = max(0, page_idx - 1)
-            return _render_script_page(new_page, segments, all_cache or {}, temp_dir, None, f"Đang xem trang {new_page + 1}")
+            return _render_script_page(new_page, segments, all_cache or {}, temp_dir, None, None, f"Đang xem trang {new_page + 1}")
 
         def _on_next_view(script_text, page_idx, all_cache, temp_dir):
             segments = parse_script(script_text) if script_text else []
             N = len(segments)
-            P = max(1, (N + PAGE_SIZE - 1) // PAGE_SIZE)
+            P = max(1, (N + PAGE_SIZE - 1) // PAGE_SIZE) if N > 0 else 1
             new_page = min(page_idx + 1, P - 1)
-            return _render_script_page(new_page, segments, all_cache or {}, temp_dir, None, f"Đang xem trang {new_page + 1}")
+            return _render_script_page(new_page, segments, all_cache or {}, temp_dir, None, None, f"Đang xem trang {new_page + 1}")
+
+        # In-tab Audio Merger function
+        def _on_merge_in_tab(temp_dir, gap_sec, progress=gr.Progress()):
+            if not temp_dir or not os.path.exists(temp_dir):
+                return "❌ Chưa có thư mục chứa audio phân đoạn nào được tạo.", None, None
+            
+            stat, aud_p, dl_p = process_audio_merger("Quét thư mục cục bộ (Local Folder)", temp_dir, None, gap_sec, progress)
+            return stat, aud_p, dl_p
 
         gen_inputs = [
             sc_lang, sc_source_type, sc_saved_profile, sc_ref_audio, sc_ref_text, sc_script,
@@ -527,10 +588,16 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
         ]
         gen_outputs = [
             *sc_audios,
-            sc_zip, sc_parsed_markdown, sc_status, sc_page_info,
+            sc_zip, sc_merged_audio, sc_merged_file, sc_parsed_markdown, sc_status, sc_page_info,
             sc_page_state, sc_cache_state, sc_temp_dir_state
         ]
 
+        # Action Listeners
+        sc_parse_now_btn.click(
+            _on_parse_only,
+            inputs=[sc_script, sc_page_state, sc_cache_state, sc_temp_dir_state],
+            outputs=gen_outputs
+        )
         sc_btn.click(_on_generate_current, inputs=gen_inputs, outputs=gen_outputs)
         sc_next_btn.click(_on_continue_next, inputs=gen_inputs, outputs=gen_outputs)
         sc_all_btn.click(_on_generate_all, inputs=gen_inputs, outputs=gen_outputs)
@@ -547,6 +614,12 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
             _on_next_view,
             inputs=[sc_script, sc_page_state, sc_cache_state, sc_temp_dir_state],
             outputs=gen_outputs
+        )
+
+        sc_merge_btn.click(
+            _on_merge_in_tab,
+            inputs=[sc_temp_dir_state, sc_merge_gap],
+            outputs=[sc_status, sc_merged_audio, sc_merged_file]
         )
 
         gemini_analyze_btn.click(
@@ -571,3 +644,4 @@ Shoppers stand in mile-long checkout lines holding baskets of fresh avocados, wh
         "sc_saved_profile": sc_saved_profile,
         "sc_preset_preview": sc_preset_preview,
     }
+
