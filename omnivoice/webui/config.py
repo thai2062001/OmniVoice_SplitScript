@@ -490,6 +490,96 @@ def get_theme_and_css():
     .dark ::-webkit-scrollbar-thumb {
         background: #3f3f46;
     }
+
+    /* ==========================================================================
+       Comprehensive Responsive Layout & Mobile/Tablet Adaptations
+       ========================================================================== */
+    @media (max-width: 1024px) {
+        .gradio-container {
+            padding: 12px 14px !important;
+        }
+        .app-header {
+            padding: 18px 20px !important;
+            margin-bottom: 14px !important;
+        }
+        .app-title {
+            font-size: 22px !important;
+        }
+        .ux-card {
+            padding: 16px !important;
+            margin-bottom: 12px !important;
+        }
+    }
+
+    @media (max-width: 768px) {
+        /* Stack columns vertically on mobile and small tablets */
+        .gradio-container {
+            padding: 8px 10px !important;
+            max-width: 100% !important;
+        }
+        .app-header {
+            padding: 14px 16px !important;
+            border-radius: 12px !important;
+        }
+        .app-title {
+            font-size: 19px !important;
+        }
+        .app-subtitle {
+            font-size: 13px !important;
+        }
+        .tab-nav button {
+            padding: 8px 12px !important;
+            font-size: 13px !important;
+        }
+        .ux-card {
+            padding: 12px !important;
+            border-radius: 10px !important;
+        }
+        .segment-card {
+            padding: 10px 12px !important;
+            flex-direction: column !important;
+            gap: 8px !important;
+        }
+        .segment-card audio {
+            width: 100% !important;
+        }
+        .preset-chip {
+            font-size: 11px !important;
+            padding: 4px 10px !important;
+            margin-bottom: 4px !important;
+        }
+        .btn-generate-all {
+            font-size: 14px !important;
+            padding: 10px 12px !important;
+        }
+        #omni-toast {
+            bottom: 20px !important;
+            right: 15px !important;
+            left: 15px !important;
+            min-width: unset !important;
+            max-width: calc(100% - 30px) !important;
+            font-size: 13px !important;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .app-title {
+            font-size: 17px !important;
+        }
+        .tab-nav {
+            overflow-x: auto !important;
+            flex-wrap: nowrap !important;
+            white-space: nowrap !important;
+            scrollbar-width: none;
+        }
+        .tab-nav::-webkit-scrollbar {
+            display: none;
+        }
+        .tab-nav button {
+            padding: 8px 10px !important;
+            font-size: 12px !important;
+        }
+    }
     """
     return theme, css
 
