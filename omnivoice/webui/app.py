@@ -363,11 +363,21 @@ def main(argv=None) -> int:
     elif args.tunnel == "none":
         should_share = False
 
+    from omnivoice.webui.config import _SAVED_VOICES_DIR, _OUTPUTS_DIR, _IS_GDRIVE
+
+    allowed_paths = [_SAVED_VOICES_DIR, _OUTPUTS_DIR]
+    if _IS_GDRIVE:
+        allowed_paths.extend([
+            "/content/drive/MyDrive",
+            "/content/drive/MyDrive/OmniVoice_Studio",
+        ])
+
     demo.queue().launch(
         server_name=args.ip,
         server_port=args.port,
         share=should_share,
         root_path=args.root_path,
+        allowed_paths=allowed_paths,
     )
     return 0
 

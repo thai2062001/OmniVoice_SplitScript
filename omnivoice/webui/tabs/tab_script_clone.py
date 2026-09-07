@@ -4,7 +4,7 @@ import tempfile
 import zipfile
 import gradio as gr
 import torch
-from omnivoice.webui.config import _IS_GDRIVE, _OUTPUTS_DIR
+from omnivoice.webui.config import _IS_GDRIVE, _OUTPUTS_DIR, DEFAULT_GEMINI_API_KEY
 from omnivoice.webui.profile_manager import list_voice_profiles, get_voice_profile_preview, load_voice_profile
 from omnivoice.webui.components import create_lang_dropdown, create_gen_settings
 from omnivoice.webui.script_parser import parse_script, analyze_script_with_gemini
@@ -161,10 +161,10 @@ Welcome to the hilarious survival drama of an unexpected offline world!""",
                     with gr.Accordion("🤖 Tự động phân tích cảm xúc & nhịp điệu bằng Gemini AI", open=False):
                         with gr.Row():
                             gemini_api_key = gr.Textbox(
-                                label="Gemini API Key (Tự động lấy từ file .env)",
+                                label="Gemini API Key (Đã tích hợp sẵn)",
                                 type="password",
-                                placeholder="Đã nạp tự động từ .env hoặc dán API Key mới...",
-                                value=os.environ.get("GEMINI_API_KEY", ""),
+                                placeholder="Đã nạp sẵn key hệ thống hoặc dán key cá nhân nếu muốn...",
+                                value=os.environ.get("GEMINI_API_KEY", DEFAULT_GEMINI_API_KEY),
                                 scale=3
                             )
                             gemini_model = gr.Dropdown(
@@ -590,7 +590,7 @@ Welcome to the hilarious survival drama of an unexpected offline world!""",
             if not temp_dir or not os.path.exists(temp_dir):
                 return "❌ Chưa có thư mục chứa audio phân đoạn nào được tạo.", None, None
             
-            stat, aud_p, dl_p = process_audio_merger("Quét thư mục cục bộ (Local Folder)", temp_dir, None, gap_sec, progress)
+            stat, aud_p, dl_p = process_audio_merger("Quét thư mục cục bộ", temp_dir, None, gap_sec, progress)
             return stat, aud_p, dl_p
 
         gen_inputs = [

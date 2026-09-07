@@ -5,12 +5,15 @@ import urllib.request
 import urllib.error
 
 
+from omnivoice.webui.config import DEFAULT_GEMINI_API_KEY
+
+
 def analyze_script_with_gemini(script_text: str, api_key: str = "", model_name: str = "gemini-3.7-flash"):
     """
     Analyzes each segment of the script to recommend emotion & voice instruction tags.
     Calls Gemini API using native standard library (no extra pip deps needed).
     """
-    key = (api_key or os.environ.get("GEMINI_API_KEY", "")).strip()
+    key = (api_key or os.environ.get("GEMINI_API_KEY", DEFAULT_GEMINI_API_KEY) or "").strip()
     if not key:
         raise ValueError("Chưa cung cấp Gemini API Key. Vui lòng nhập API Key vào ô cấu hình hoặc đặt biến môi trường GEMINI_API_KEY.")
 
