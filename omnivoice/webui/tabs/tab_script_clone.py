@@ -161,16 +161,24 @@ Welcome to the hilarious survival drama of an unexpected offline world!""",
                     with gr.Accordion("🤖 Tự động phân tích cảm xúc & nhịp điệu bằng Gemini AI", open=False):
                         with gr.Row():
                             gemini_api_key = gr.Textbox(
-                                label="Gemini API Key",
+                                label="Gemini API Key (Tự động lấy từ file .env)",
                                 type="password",
-                                placeholder="Dán Google Gemini API Key vào đây (hoặc để trống nếu đã set ENV)...",
+                                placeholder="Đã nạp tự động từ .env hoặc dán API Key mới...",
                                 value=os.environ.get("GEMINI_API_KEY", ""),
                                 scale=3
                             )
                             gemini_model = gr.Dropdown(
-                                label="Model Gemini",
-                                choices=["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"],
-                                value="gemini-2.5-flash",
+                                label="Model Gemini AI",
+                                choices=[
+                                    "gemini-3.7-flash",
+                                    "gemini-3.8-flash",
+                                    "gemini-2.5-flash",
+                                    "gemini-2.5-pro",
+                                    "gemini-2.0-flash",
+                                ],
+                                value="gemini-3.7-flash",
+                                allow_custom_value=True,
+                                info="Mặc định sử dụng Gemini 3.7 Flash mới nhất.",
                                 scale=1
                             )
                         gemini_analyze_btn = gr.Button("✨ Bắt Đầu Phân Tích Cảm Xúc (Gemini AI)", variant="secondary")

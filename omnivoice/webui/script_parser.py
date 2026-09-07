@@ -5,7 +5,7 @@ import urllib.request
 import urllib.error
 
 
-def analyze_script_with_gemini(script_text: str, api_key: str = "", model_name: str = "gemini-2.5-flash"):
+def analyze_script_with_gemini(script_text: str, api_key: str = "", model_name: str = "gemini-3.7-flash"):
     """
     Analyzes each segment of the script to recommend emotion & voice instruction tags.
     Calls Gemini API using native standard library (no extra pip deps needed).

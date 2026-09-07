@@ -2,6 +2,30 @@ import os
 import gradio as gr
 from omnivoice.utils.lang_map import LANG_NAMES, lang_display_name
 
+# ---------------------------------------------------------------------------
+# Load .env file automatically if present
+# ---------------------------------------------------------------------------
+def _load_env_file():
+    env_paths = [
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"),
+        os.path.join(os.getcwd(), ".env"),
+    ]
+    for ep in env_paths:
+        if os.path.exists(ep):
+            try:
+                with open(ep, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            k, v = line.split("=", 1)
+                            k, v = k.strip(), v.strip().strip("'").strip('"')
+                            if k and k not in os.environ:
+                                os.environ[k] = v
+            except Exception:
+                pass
+
+_load_env_file()
+
 
 # ---------------------------------------------------------------------------
 # Storage Directory Detection (Auto-detect Google Drive vs Local)
