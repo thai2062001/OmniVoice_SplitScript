@@ -23,16 +23,31 @@ def _clean_gpu_memory():
 
 
 def _normalize_audio_input(audio_in):
-    """Safely extracts a valid file path or audio object from various Gradio component types."""
+    """Safely extracts a valid file path or saves numpy audio tuple to a temporary wav file."""
     if audio_in is None:
         return None
     if isinstance(audio_in, str):
-        return audio_in.strip()
-    if hasattr(audio_in, "name"):
+        p = audio_in.strip()
+        return p if os.path.exists(p) else None
+    if hasattr(audio_in, "name") and audio_in.name and os.path.exists(audio_in.name):
         return audio_in.name
     if isinstance(audio_in, dict):
-        return audio_in.get("name") or audio_in.get("path")
-    return audio_in
+        p = audio_in.get("name") or audio_in.get("path")
+        if p and os.path.exists(p):
+            return p
+    # Handle tuple format: (sample_rate, numpy_ndarray) from Gradio microphone / recorded audio
+    if isinstance(audio_in, tuple) and len(audio_in) == 2:
+        sr, arr = audio_in
+        if arr is not None:
+            try:
+                import soundfile as sf
+                tmp = tempfile.NamedTemporaryFile(delete=False, suffix="_recorded.wav")
+                sf.write(tmp.name, arr, sr)
+                tmp.close()
+                return tmp.name
+            except Exception as e:
+                logging.warning(f"Failed to write audio tuple to temp file: {e}")
+    return str(audio_in) if (isinstance(audio_in, str) and os.path.exists(audio_in)) else None
 
 
 def extract_voice_prompt_safely(model: OmniVoice, audio_path: str, ref_txt: str = None, progress_cb=None):

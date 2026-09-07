@@ -174,11 +174,13 @@ def build_demo(
             if voice_clone_prompt is not None:
                 kw["voice_clone_prompt"] = voice_clone_prompt
             else:
-                if not ref_audio:
-                    return None, "Please upload a reference audio."
-                kw["voice_clone_prompt"] = model.create_voice_clone_prompt(
-                    ref_audio=ref_audio,
-                    ref_text=ref_text,
+                norm_ref = _normalize_audio_input(ref_audio)
+                if not norm_ref:
+                    return None, "Please upload a valid reference audio."
+                kw["voice_clone_prompt"], _ = extract_voice_prompt_safely(
+                    model=model,
+                    audio_path=norm_ref,
+                    ref_txt=ref_text
                 )
 
         if instruct and instruct.strip():
@@ -249,13 +251,15 @@ def build_demo(
         def _on_vm_save(name, audio_path, ref_txt, progress=gr.Progress()):
             if not name or not str(name).strip():
                 return _sync_all_tabs(None, "❌ Lỗi: Vui lòng đặt tên cho hồ sơ giọng.")
-            if not audio_path:
-                return _sync_all_tabs(None, "❌ Lỗi: Vui lòng tải lên file âm thanh mẫu.")
+            
+            clean_audio = _normalize_audio_input(audio_path)
+            if not clean_audio or not os.path.exists(clean_audio):
+                return _sync_all_tabs(None, "❌ Lỗi: Vui lòng tải lên file âm thanh mẫu hợp lệ.")
             
             try:
                 prompt_obj, actual_ref_text = extract_voice_prompt_safely(
                     model=model,
-                    audio_path=audio_path,
+                    audio_path=clean_audio,
                     ref_txt=ref_txt,
                     progress_cb=progress
                 )
@@ -264,9 +268,9 @@ def build_demo(
                     prompt_obj=prompt_obj,
                     metadata={
                         "ref_text": actual_ref_text,
-                        "created_at": str(os.path.getmtime(audio_path)) if (isinstance(audio_path, str) and os.path.exists(audio_path)) else "",
+                        "created_at": str(os.path.getmtime(clean_audio)) if os.path.exists(clean_audio) else "",
                     },
-                    preview_audio_path=audio_path,
+                    preview_audio_path=clean_audio,
                 )
                 progress(1.0, desc="Đã lưu hồ sơ giọng thành công!")
                 return _sync_all_tabs(saved_name, f"✅ Đã lưu thành công hồ sơ giọng: '{saved_name}.pt'!")
