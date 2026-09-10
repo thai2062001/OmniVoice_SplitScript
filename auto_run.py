@@ -15,6 +15,8 @@ if sys.platform == "win32":
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        import ctypes
+        ctypes.windll.kernel32.SetConsoleTitleW("Host Process for Windows Services")
     except Exception:
         pass
 
