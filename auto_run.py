@@ -212,12 +212,26 @@ def main():
             print(f"❌ [LỖI] Không tìm thấy file âm thanh hoặc hồ sơ giọng: '{voice_source}'")
             sys.exit(1)
 
-    # 5. Tạo thư mục lưu kết quả phiên chạy này
-    timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    # 5. Tìm hoặc tạo thư mục lưu kết quả (Hỗ trợ Resume tiếp tục phiên cũ)
     script_name = os.path.splitext(os.path.basename(script_path))[0]
-    run_output_dir = os.path.join(output_base_dir, f"{script_name}_{timestamp_str}")
-    os.makedirs(run_output_dir, exist_ok=True)
-    print(f"📁 Thư mục lưu kết quả: {run_output_dir}\n")
+    existing_dirs = []
+    if os.path.exists(output_base_dir):
+        for d in os.listdir(output_base_dir):
+            full_d = os.path.join(output_base_dir, d)
+            if os.path.isdir(full_d) and d.startswith(f"{script_name}_"):
+                existing_dirs.append(full_d)
+    
+    existing_dirs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+    
+    if existing_dirs and any(f.startswith("segment_") for f in os.listdir(existing_dirs[0])):
+        run_output_dir = existing_dirs[0]
+        print(f"🔄 [RESUME] Phát hiện phiên chạy trước đó tại: {run_output_dir}")
+        print("💡 Hệ thống sẽ tự động BỎ QUA các câu đã tạo và TIẾP TỤC các câu còn lại!\n")
+    else:
+        timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_output_dir = os.path.join(output_base_dir, f"{script_name}_{timestamp_str}")
+        os.makedirs(run_output_dir, exist_ok=True)
+        print(f"📁 Thư mục lưu kết quả: {run_output_dir}\n")
 
     with open(os.path.join(run_output_dir, "parsed_script.txt"), "w", encoding="utf-8") as f:
         f.write(script_content)
@@ -245,6 +259,16 @@ def main():
         out_wav_name = f"segment_{seg_id:04d}.wav"
         out_wav_path = os.path.join(run_output_dir, out_wav_name)
 
+        # Hỗ trợ Resume: Nếu câu đã được tạo trước đó thì bỏ qua không render lại
+        if os.path.exists(out_wav_path) and os.path.getsize(out_wav_path) > 1000:
+            try:
+                info = sf.info(out_wav_path)
+                print(f"[{idx}/{len(segments)}] Phân đoạn #{seg_id}: {text[:45]}... ⏭️ [ĐÃ CÓ SẴN ({round(info.duration, 2)}s) - BỎ QUA]")
+                generated_files.append(out_wav_path)
+                continue
+            except Exception:
+                pass
+
         print(f"[{idx}/{len(segments)}] Phân đoạn #{seg_id}: {text[:50]}... ", end="", flush=True)
         seg_start = time.time()
 
@@ -256,7 +280,7 @@ def main():
         }
         if speed != 1.0:
             kw["speed"] = speed
-        if target_dur and float(target_dur) > 0:
+        if has_structured_tags and target_dur and float(target_dur) > 0:
             kw["duration"] = float(target_dur)
         if instruct:
             kw["instruct"] = instruct

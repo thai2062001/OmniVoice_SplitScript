@@ -8,7 +8,7 @@ import urllib.error
 from omnivoice.webui.config import DEFAULT_GEMINI_API_KEY
 
 
-def analyze_script_with_gemini(script_text: str, api_key: str = "", model_name: str = "gemini-3.7-flash"):
+def analyze_script_with_gemini(script_text: str, api_key: str = "", model_name: str = "gemini-1.5-flash"):
     """
     Analyzes each segment of the script to recommend emotion & voice instruction tags.
     Calls Gemini API using native standard library (no extra pip deps needed).
@@ -215,12 +215,9 @@ def parse_script(script_text: str):
             cleaned = raw_line.strip()
             if not cleaned or cleaned.startswith("===") or cleaned.startswith("---"):
                 continue
-            # Estimate reasonable duration based on word count (approx 2.5-3 words per sec)
-            words = len(cleaned.split())
-            est_duration = max(3.0, round(words * 0.35 + 1.0, 1))
             segments.append({
                 "id": seg_counter,
-                "duration": est_duration,
+                "duration": None,
                 "text": cleaned,
                 "emotion": "",
                 "guidance": "",
