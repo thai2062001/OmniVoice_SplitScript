@@ -1,0 +1,15 @@
+{
+  "script_file": "script.md",
+  "voice_source": "voice.mp3",
+  "ref_text": "",
+  "language": "Auto",
+  "num_step": 24,
+  "guidance_scale": 2.0,
+  "speed": 1.0,
+  "merge_gap": 0.3,
+  "output_dir": "omnivoice/cli/outputs/auto_runs",
+  "use_gemini_analysis": true,
+  "auto_merge": true,
+  "model_checkpoint": "k2-fsa/OmniVoice",
+  "device": null
+}
