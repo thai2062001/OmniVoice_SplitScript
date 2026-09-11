@@ -312,7 +312,8 @@ def main():
                 gap_sec=merge_gap,
             )
             if merged_filepath and os.path.exists(merged_filepath):
-                final_merged_name = f"FINAL_MERGED_{script_name}_{timestamp_str}.wav"
+                cur_time_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                final_merged_name = f"FINAL_MERGED_{script_name}_{cur_time_str}.wav"
                 final_merged_path = os.path.join(run_output_dir, final_merged_name)
                 shutil.copy2(merged_filepath, final_merged_path)
                 print("=" * 65)
