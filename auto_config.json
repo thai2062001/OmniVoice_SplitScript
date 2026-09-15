@@ -1,7 +1,7 @@
 {
   "script_file": "script.md",
   "voice_source": "voice.mp3",
-  "ref_text": "こんにちは 私の声は日本語ナレーション セリフ ポッドキャストやショートムービーで使われています いろんなところに使ってみてくださいね",
+  "ref_text": "皆さんこんにちは。お元気ですか?この度は私の声を聞いて、使っていただきありがとうございます。皆さんの助けに少しでもなれたら幸いです。",
   "language": "Japanese",
   "num_step": 24,
   "guidance_scale": 2.0,
