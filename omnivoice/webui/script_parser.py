@@ -209,11 +209,16 @@ def parse_script(script_text: str):
         if current_seg:
             segments.append(current_seg)
     else:
-        # Fallback: Plain text line-by-line parsing
         seg_counter = 1
         for raw_line in lines:
             cleaned = raw_line.strip()
+            # Bỏ dòng phân cách hoặc rỗng
             if not cleaned or cleaned.startswith("===") or cleaned.startswith("---"):
+                continue
+            # Làm sạch ký tự Markdown (#, *, _, `, >)
+            cleaned = re.sub(r'^[#>\s*_\-]+', '', cleaned).strip()
+            cleaned = re.sub(r'[*_`]', '', cleaned).strip()
+            if not cleaned:
                 continue
             segments.append({
                 "id": seg_counter,

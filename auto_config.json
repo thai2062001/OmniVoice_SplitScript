@@ -1,11 +1,11 @@
 {
   "script_file": "script.md",
   "voice_source": "voice.mp3",
-  "ref_text": "最高の報酬は努力したことによって得られるものだ",
+  "ref_text": "こんにちは 私の声は日本語ナレーション セリフ ポッドキャストやショートムービーで使われています いろんなところに使ってみてくださいね",
   "language": "Japanese",
   "num_step": 24,
   "guidance_scale": 2.0,
-  "speed": 0.75,
+  "speed": 1.15,
   "merge_gap": 0.4,
   "output_dir": "omnivoice/cli/outputs/auto_runs",
   "use_gemini_analysis": false,

@@ -212,26 +212,12 @@ def main():
             print(f"❌ [LỖI] Không tìm thấy file âm thanh hoặc hồ sơ giọng: '{voice_source}'")
             sys.exit(1)
 
-    # 5. Tìm hoặc tạo thư mục lưu kết quả (Hỗ trợ Resume tiếp tục phiên cũ)
+    # 5. Tạo thư mục lưu kết quả mới hoàn toàn cho từng phiên chạy
     script_name = os.path.splitext(os.path.basename(script_path))[0]
-    existing_dirs = []
-    if os.path.exists(output_base_dir):
-        for d in os.listdir(output_base_dir):
-            full_d = os.path.join(output_base_dir, d)
-            if os.path.isdir(full_d) and d.startswith(f"{script_name}_"):
-                existing_dirs.append(full_d)
-    
-    existing_dirs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-    
-    if existing_dirs and any(f.startswith("segment_") for f in os.listdir(existing_dirs[0])):
-        run_output_dir = existing_dirs[0]
-        print(f"🔄 [RESUME] Phát hiện phiên chạy trước đó tại: {run_output_dir}")
-        print("💡 Hệ thống sẽ tự động BỎ QUA các câu đã tạo và TIẾP TỤC các câu còn lại!\n")
-    else:
-        timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_output_dir = os.path.join(output_base_dir, f"{script_name}_{timestamp_str}")
-        os.makedirs(run_output_dir, exist_ok=True)
-        print(f"📁 Thư mục lưu kết quả: {run_output_dir}\n")
+    timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_output_dir = os.path.join(output_base_dir, f"{script_name}_{timestamp_str}")
+    os.makedirs(run_output_dir, exist_ok=True)
+    print(f"📁 Thư mục lưu kết quả phiên mới: {run_output_dir}\n")
 
     with open(os.path.join(run_output_dir, "parsed_script.txt"), "w", encoding="utf-8") as f:
         f.write(script_content)

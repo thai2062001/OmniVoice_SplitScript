@@ -76,12 +76,46 @@ Dưới đây là các ca lỗi thực tế đã giải quyết triệt để:
 
 ---
 
-### 6. Bẫy số 6: Tên riêng nước ngoài bị biến âm
-- **Tàu ngầm ARA San Juan:**
-  - Viết `サンファン` dễ bị AI đọc lướt thành `3番` (*Sanban* - số 3).
-  - ✅ Cách sửa: Thêm dấu chấm giữa tên: `「サン・ファン」`.
-- **Thuyền trưởng Nga Dmitry Kolesnikov:**
-  - Viết Katakana chuẩn có dấu chấm: `ドミトリー・コレスニコフ大尉`.
+### 7. Bẫy số 7: Dồn dập danh từ ghép dài gây ngợp & líu lưỡi (Compound Noun Glitch)
+- **Hiện tượng:** Khi để nhiều danh từ ghép chuyên ngành liên tiếp trong 1 hơi thở (ví dụ: `18層の闇に隠された古代の超巨大生存要塞`), AI TTS sẽ bị quá tải bộ đệm, đọc vấp trẹo âm (*choukyodai seizon yousai* bị líu thành âm rác) hoặc ngắt hơi gượng gạo.
+- **Cách khắc phục:** 
+  - Tách câu ngắn độc lập (25–40 ký tự / câu).
+  - Thêm dấu ngắt nhịp tự nhiên `、`:
+    - ❌ Cũ: `古代の超巨大生存要塞です`
+    - ✅ Mới: `古代の、きょだいな生存要塞です。`
+  - **Kết quả:** Âm thanh rõ ràng từng âm tiết, giọng đọc trầm ấm và uy lực.
+
+---
+
+### 8. Bẫy số 8: Lỗi nuốt số tầng (`18層`) và lỗi nối âm số đếm (`地下85m`)
+- **Số tầng bị nuốt thành "sho...":**
+  - Số Latinh `18` đứng cạnh chữ `層` khiến bộ tách từ G2P đoán nhầm thành âm câm hoặc đọc cụt đầu *sho...*.
+  - ❌ Gốc: `18層`
+  - ✅ Khắc phục: Chuyển hẳn sang Hiragana **`じゅうはっそう`** (*Jū-hassō*).
+- **Lỗi dính chữ nối âm số đo:**
+  - Viết dính `地下85メートル` hoặc `地下はちじゅうごメートル` dễ khiến AI nối âm đọc lướt thành *“Chika-wa chijuugometoru”* (nghe nhầm thành số 70/chijū).
+  - ❌ Cũ: `地下85メートル`
+  - ✅ Mới: `地下、はちじゅうごメートル。` (Thêm dấu phẩy tách bạch chữ Hachi).
+
+---
+
+### 9. Bẫy số 9: Lỗi lệch Ref Text gây ảo giác (Hallucination)
+- **Hiện tượng:** AI tự sinh ra triết lý ngoài lề (*最高の報酬は...*) hoặc tạp âm lạ (*うぇしん おしと...*).
+- **Nguyên nhân:** Khai báo sai văn bản mẫu (`ref_text`) không khớp 100% với file audio mẫu (`voice.mp3`).
+- **Quy tắc vàng:** Luôn dùng Whisper ASR để transcribe chính xác 100% từng từ trong file `voice.mp3` trước khi nạp vào cấu hình Voice Clone.
+
+---
+
+### 10. Bẫy số 10: Kiểm soát nhịp thở (Pacing) & Phát âm lượng từ đặc thù
+- **Kỹ thuật nối hơi bằng dấu phẩy `、` thay vì dấu chấm `。`:**
+  - Dấu chấm `。` khiến AI ngắt hơi hẳn 0.5s - 0.8s, làm đứt đoạn cảm xúc khi câu sau bắt đầu bằng các liên từ chuyển tiếp (`そこに...`, `そして...`).
+  - ❌ Gắt nhịp: `トルコの荒涼とした大地の地下85メートル。そこには…`
+  - ✅ Nối hơi tự nhiên: `トルコの荒涼とした大地の地下85メートル、そこには、2万人以上の命をかくすに足る超巨大地下都市が存在しています。`
+- **Quy tắc lượng từ vật dụng:**
+  - `1本のハンマー`: Đảm bảo AI đọc là **`いっぽん`** (*ippon*), không đọc rời *ichi-hon*.
+  - `18層`: Khóa cứng **`じゅうはっそう`** (*jū-hassō*), không đọc tách *jū-hachi-sō*.
+- **Tốc độ vàng (Golden Speed Ratio):**
+  - Giữ tốc độ ở mức **1.1x – 1.15x** cho các video tài liệu khoa học/khám phá để mở màn có độ dồn dập, cuốn hút người xem ngay từ những giây đầu tiên.
 
 ---
 
